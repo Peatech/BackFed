@@ -24,11 +24,11 @@ class FLDetectorServer(AnomalyDetectionServer):
         self.window_size = window_size
         self.init_model = None
         
-        # After calling _initialize_model()
+        # After calling _init_model()
         if len(self.exclude_list) > 0:
             self.client_manager.update_rounds_selection(self.exclude_list, start_round=self.start_round)
 
-    def _initialize_model(self):
+    def _init_model(self):
         """
         Get the initial model.
         """
