@@ -12,7 +12,6 @@ import os
 from typing import Dict, List
 from logging import WARNING, INFO
 from backfed.utils.logging_utils import log
-from hydra.utils import get_class
 
 class ClientManager:
     """
