@@ -1,8 +1,8 @@
 <div align="center">
-  <img src="backfed_logo.png" alt="BackFed project logo" width="30%"/>
+  <h1> BackFed: An Efficient & Standardized Benchmark Suite for Backdoor Attacks in Federated Learning </h1>
+  <img src="backfed_logo.png" alt="BackFed project logo" width="50%"/>
+  <br><br/>
   
-  # BackFed: An Efficient & Standardized Benchmark Suite for Backdoor Attacks in Federated Learning
-
   [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/) [![PyTorch 2.6.0](https://img.shields.io/badge/PyTorch-2.6.0-ee4c2c.svg)](https://pytorch.org/get-started/locally/) [![Ray 2.10.0](https://img.shields.io/badge/Ray-2.10.0-blue.svg)](https://docs.ray.io/en/latest/installation.html) [![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT) [![Paper](https://img.shields.io/badge/Paper-arXiv-red.svg)](https://arxiv.org/abs/2507.04903)
 </div>
 
