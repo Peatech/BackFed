@@ -34,6 +34,7 @@ num_classes: 62
 # *Test configuration
 test_batch_size: 2048
 test_every: 1 # Test every x rounds
+num_workers: 8 # Number of workers for dataloader
 
 # *Default local training configuration (passed to clients during training)
 client_config:

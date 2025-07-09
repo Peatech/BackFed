@@ -30,8 +30,8 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
 
 1. Clone the repository:
   ```bash
-  git clone https://github.com/thinh-dao/FL_BackdoorBench.git
-  cd FL_BackdoorBench
+  git clone https://github.com/thinh-dao/BackFed.git
+  cd BackFed
   ```
 
 2. Install dependencies:
@@ -42,7 +42,7 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
 ## Project Structure
 
 ```
-FL_BackdoorBench/
+BackFed/
 ├── config/                 # Configuration files
 │   ├── base.yaml           # Base configuration
 │   ├── cifar10.yaml        # CIFAR-10 specific config

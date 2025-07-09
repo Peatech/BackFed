@@ -95,10 +95,10 @@ name_tag: ""
 dir_tag: ${eval:"'${dataset}_${aggregator}_noattack' if ${no_attack} else '${dataset}_${aggregator}_${atk_config.model_poison_method}(${atk_config.data_poison_method})'"}
 
 wandb:
-  entity: dthinh-forwork-vinuniversity
-  project: paper_exp
+  entity: ??? # Optional, load from .env file
+  project: ??? # Optional, load from .env file
+  name: ??? # Automatically set during runtime (See init_wandb() method)
   mode: online
-  name: ??? # Automatically set during runtime with the format <dataset_strategy_attack_partition>
   save_model: False # Whether to save the model to wandb
   save_model_round: -1 # Default: Save model at last round
 

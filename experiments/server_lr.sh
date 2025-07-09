@@ -1,7 +1,7 @@
-python main.py -m \
+python main.py -m -cn cifar10 \
     aggregator=unweighted_fedavg \
     aggregator_config.unweighted_fedavg.eta=0.1,0.4,0.7,1.0 \
-    atk_config=multishot \
+    atk_config=cifar10_multishot \
     atk_config.poison_start_round=2000 \
     atk_config.poison_end_round=2300 \
     checkpoint=2000 \

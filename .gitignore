@@ -71,7 +71,7 @@ multirun/
 *.pdf
 
 # Project-specific
-fl_backdoorbench/outputs
+outputs
 figures/
 csv_results/
 data/ARDIS

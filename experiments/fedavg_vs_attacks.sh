@@ -1,191 +1,49 @@
-python main.py -m \
+######## Baseline: FedAvg against attacks ########
+
+############## CIFAR10 Multishot ################
+# One-line argument using Hydra --multirun 
+# For efficiency, you may run attacks in different processes
+
+python main.py -m -cn cifar10\
     aggregator=unweighted_fedavg \
-    atk_config=multishot \
+    atk_config=cifar10_multishot \
     atk_config.model_poison_method=base,neurotoxin,chameleon \
-    atk_config.data_poison_method=pattern \
+    atk_config.data_poison_method=pattern,distributed,edge_case,a3fl,iba \
     checkpoint=2000 \
     save_logging=csv \
     num_rounds=600 \
     num_gpus=0.5 \
     num_cpus=1 \
-    dir_tag=fed_avg_vs_attacks \
-    cuda_visible_devices=\"1,2,3,4,5\"
+    dir_tag=cifar10_fed_avg_vs_attacks \
+    cuda_visible_devices=\"0,1,2,3,4\"
 
+################ EMNIST Multishot ################
 
-
-python main.py -m \
+python main.py -m -cn emnist \
     aggregator=unweighted_fedavg \
-    atk_config=multishot \
+    model=mnistnet \
+    checkpoint=1000 \
+    atk_config=emnist_multishot \
     atk_config.model_poison_method=base,neurotoxin,chameleon \
-    atk_config.data_poison_method=distributed \
-    checkpoint=2000 \
+    atk_config.data_poison_method=pattern,distributed,edge_case,a3fl,iba \
     save_logging=csv \
     num_rounds=600 \
     num_gpus=0.5 \
     num_cpus=1 \
-    dir_tag=fed_avg_vs_attacks \
+    dir_tag=emnist_fed_avg_vs_attacks \
     cuda_visible_devices=\"0,1,2,3,4\"
 
 
-
-
-python main.py -m \
+############## CIFAR10 Singleshot ################
+python main.py -m -cn cifar10\
     aggregator=unweighted_fedavg \
-    atk_config=multishot \
+    atk_config=cifar10_multishot \
     atk_config.model_poison_method=base,neurotoxin,chameleon \
-    atk_config.data_poison_method=edge_case \
+    atk_config.data_poison_method=pattern,distributed,edge_case,a3fl,iba \
     checkpoint=2000 \
     save_logging=csv \
     num_rounds=600 \
     num_gpus=0.5 \
     num_cpus=1 \
-    dir_tag=fed_avg_vs_attacks \
-    cuda_visible_devices=\"5,4,3,2,1\"
-
-
-
-
-python main.py -m \
-    aggregator=unweighted_fedavg \
-    atk_config=multishot \
-    atk_config.model_poison_method=base,neurotoxin,chameleon \
-    atk_config.data_poison_method=a3fl \
-    checkpoint=2000 \
-    save_logging=csv \
-    num_rounds=600 \
-    num_gpus=0.5 \
-    num_cpus=1 \
-    dir_tag=fed_avg_vs_attacks \
-    cuda_visible_devices=\"5,4,3,2,1\"
-
-
-
-
-python main.py -m \
-    aggregator=unweighted_fedavg \
-    atk_config=multishot \
-    atk_config.model_poison_method=base,neurotoxin,chameleon \
-    atk_config.data_poison_method=iba \
-    checkpoint=2000 \
-    save_logging=csv \
-    num_rounds=600 \
-    num_gpus=0.5 \
-    num_cpus=1 \
-    dir_tag=fed_avg_vs_attacks \
-    cuda_visible_devices=\"3,4,5,2,1\"
-
-
-
-################ EMNIST ################
-# num_clients=3383 \
-# num_clients_per_round=30 \
-# dataset=emnist_byclass \
-# test_batch_size=5000 \
-# num_workers=8 \
-# model=mnistnet \
-# checkpoint=1000 \
-# atk_config=emnist_multishot \
-
-python main.py -m \
-    aggregator=unweighted_fedavg \
-    num_clients=3383 \
-    num_clients_per_round=30 \
-    dataset=emnist_byclass \
-    test_batch_size=5000 \
-    num_workers=8 \
-    model=mnistnet \
-    checkpoint=1000 \
-    atk_config=emnist_multishot \
-    atk_config.model_poison_method=base,neurotoxin,chameleon \
-    atk_config.data_poison_method=pattern \
-    save_logging=csv \
-    num_rounds=600 \
-    num_gpus=0.5 \
-    num_cpus=1 \
-    dir_tag=fed_avg_vs_attacks_emnist \
-    cuda_visible_devices=\"1,2,3,4,5\"
-
-
-
-python main.py -m \
-    aggregator=unweighted_fedavg \
-    num_clients=3383 \
-    num_clients_per_round=30 \
-    dataset=emnist_byclass \
-    test_batch_size=5000 \
-    num_workers=8 \
-    model=mnistnet \
-    checkpoint=1000 \
-    atk_config=emnist_multishot \
-    atk_config.model_poison_method=base,neurotoxin,chameleon \
-    atk_config.data_poison_method=distributed \
-    save_logging=csv \
-    num_rounds=600 \
-    num_gpus=0.5 \
-    num_cpus=1 \
-    dir_tag=fed_avg_vs_attacks_emnist \
-    cuda_visible_devices=\"6,5,4,3,2\"
-
-
-
-
-python main.py -m \
-    aggregator=unweighted_fedavg \
-    num_clients=3383 \
-    num_clients_per_round=30 \
-    dataset=emnist_byclass \
-    test_batch_size=5000 \
-    num_workers=8 \
-    model=mnistnet \
-    checkpoint=1000 \
-    atk_config=emnist_multishot \
-    atk_config.model_poison_method=base,neurotoxin,chameleon \
-    atk_config.data_poison_method=edge_case \
-    save_logging=csv \
-    num_rounds=600 \
-    num_gpus=0.5 \
-    num_cpus=1 \
-    dir_tag=fed_avg_vs_attacks_emnist \
-    cuda_visible_devices=\"6,5,4,3,2\"
-
-
-
-
-python main.py -m \
-    aggregator=unweighted_fedavg \
-    num_clients=3383 \
-    num_clients_per_round=30 \
-    dataset=emnist_byclass \
-    test_batch_size=5000 \
-    num_workers=8 \
-    model=mnistnet \
-    checkpoint=1000 \
-    atk_config=emnist_multishot \
-    atk_config.model_poison_method=base,neurotoxin,chameleon \
-    atk_config.data_poison_method=a3fl \
-    save_logging=csv \
-    num_rounds=600 \
-    num_gpus=0.5 \
-    num_cpus=1 \
-    dir_tag=fed_avg_vs_attacks_emnist \
-    cuda_visible_devices=\"6,5,4,3,2\"
-
-
-python main.py -m \
-    aggregator=unweighted_fedavg \
-    num_clients=3383 \
-    num_clients_per_round=30 \
-    dataset=emnist_byclass \
-    test_batch_size=5000 \
-    num_workers=8 \
-    model=mnistnet \
-    checkpoint=1000 \
-    atk_config=emnist_multishot \
-    atk_config.model_poison_method=base,neurotoxin,chameleon \
-    atk_config.data_poison_method=iba \
-    save_logging=csv \
-    num_rounds=600 \
-    num_gpus=0.5 \
-    num_cpus=1 \
-    dir_tag=fed_avg_vs_attacks_emnist \
-    cuda_visible_devices=\"7,6,5,4,3\"
+    dir_tag=cifar10_fed_avg_vs_attacks \
+    cuda_visible_devices=\"0,1,2,3,4\"

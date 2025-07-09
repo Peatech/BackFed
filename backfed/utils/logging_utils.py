@@ -16,7 +16,7 @@ import re
 
 from dotenv import load_dotenv
 from omegaconf import OmegaConf
-from logging import INFO
+from logging import INFO, WARNING, ERROR
 from rich.logging import RichHandler
 from rich.console import Console
 
@@ -252,22 +252,43 @@ def init_wandb(config):
     # Login to wandb
     load_dotenv()        
     api_key = os.getenv('WANDB_API_KEY')
+    project = os.getenv('WANDB_PROJECT')
+    entity = os.getenv('WANDB_ENTITY')
+    
+    # Validate API key (REQUIRED)
+    if not api_key or api_key == 'your_wandb_api_key_here':
+        log(ERROR, "❌ WANDB_API_KEY not properly set! Get your API key from https://wandb.ai/settings nad update .env file.")
+        raise ValueError("Valid WANDB_API_KEY is required")
+    
+    # Validate entity (OPTIONAL but recommended)
+    if not entity or entity == 'your_wandb_username':
+        log(WARNING, "⚠️ WANDB_ENTITY not set or using placeholder value. Consider setting your wandb username/team name for better organization")
+        entity = None  # wandb will use default
+    
+    # Project name validation (can use default)
+    if not project or project == 'backfed':
+        log(WARNING, "⚠️ Project name not set. Using default: backfed")
+        project = 'backfed'
+    
+    # Set config values
+    config.wandb.project = project
+    config.wandb.entity = entity
+    
     wandb.login(key=api_key)
 
     # Define name for wandb run
     aggregator = config.aggregator
 
-    if config.no_attack:
-        attack_name = "noattack"
-    else:
-        attack_name = f"{config.atk_config.model_poison_method}({config.atk_config.data_poison_method})"
-
     if config.partitioner.lower() == "dirichlet":
         partitoner = f"dirichlet({config.alpha})"
     else:
         partitoner = "uniform"
-
-    config.wandb.name = f"{attack_name}_{aggregator.lower()}_{config.dataset.lower()}_{partitoner}_{config.atk_config.selection_scheme}_{config.atk_config.poison_frequency}"
+        
+    if config.no_attack:
+        config.wandb.name = f"{config.dataset.lower()}_{aggregator.lower()}_noattack"
+    else:
+        config.wandb.name = f"{config.dataset.lower()}_{aggregator.lower()}_{config.atk_config.model_poison_method}({config.atk_config.data_poison_method})_{partitoner}_{config.atk_config.selection_scheme}_{config.atk_config.poison_frequency}"
+        
     if config.name_tag:
         config.wandb.name = f"{config.wandb.name}_{config.name_tag}"
 
