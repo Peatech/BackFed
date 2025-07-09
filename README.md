@@ -1,15 +1,12 @@
 <div align="center">
-  <img src="backfed_logo.png" alt="BackFed Logo" width="50%"/>
+  <img src="backfed_logo.png" alt="BackFed project logo" width="30%"/>
+  
+  # BackFed: An Efficient & Standardized Benchmark Suite for Backdoor Attacks in Federated Learning
+
+  [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/) [![PyTorch 2.6.0](https://img.shields.io/badge/PyTorch-2.6.0-ee4c2c.svg)](https://pytorch.org/get-started/locally/) [![Ray 2.10.0](https://img.shields.io/badge/Ray-2.10.0-blue.svg)](https://docs.ray.io/en/latest/installation.html) [![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT) [![Paper](https://img.shields.io/badge/Paper-arXiv-red.svg)](https://arxiv.org/abs/2507.04903)
 </div>
 
-# BackFed: An Efficient & Standardized Benchmark Suite for Backdoor Attacks in Federated Learning
-
-[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
-[![PyTorch 2.6.0](https://img.shields.io/badge/PyTorch-2.6.0-ee4c2c.svg)](https://pytorch.org/get-started/locally/)
-[![Ray 2.10.0](https://img.shields.io/badge/Ray-2.10.0-blue.svg)](https://docs.ray.io/en/latest/installation.html)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Paper](https://img.shields.io/badge/Paper-arXiv-red.svg)](https://arxiv.org/abs/2507.04903)
-
+## About
 BackFed is a comprehensive benchmark framework to efficiently and reliably evaluate backdoor attacks in Federated Learning (FL). This benchmark integrates Ray for parallel execution, Hydra for configuration management, and a modular architecture for easy extension of new attacks and defenses. Compared to existing codebases for backdoor attacks in FL, our framework could **achieve 2X - 10X speedup in training time.**
 
 📄 **Paper**: [BackFed: An Efficient & Standardized Benchmark Suite for Backdoor Attacks in Federated Learning](https://arxiv.org/abs/2507.04903)
