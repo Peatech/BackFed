@@ -23,15 +23,15 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
 
 - Python 3.11
 - PyTorch 2.6.0
-- Ray 2.10.0
+- Ray 2.10.0 (Most reliable version, later versions could lead to high RAM usage)
 - CUDA-compatible GPU (recommended)
 
 ### Setup
 
 1. Clone the repository:
   ```bash
-  git clone https://github.com/thinh-dao/BackFed.git
-  cd BackFed
+  git clone https://github.com/thinh-dao/FL_BackdoorBench.git
+  cd FL_BackdoorBench
   ```
 
 2. Install dependencies:
@@ -39,18 +39,21 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
   pip install -r requirements.txt
   ```
 
+3. Download pretrained models (Optional)
+  Experiments in ```config``` folder required trained checkpoints, which are provided in 
+
 ## Project Structure
 
 ```
-BackFed/
+FL_BackdoorBench/
 ├── config/                 # Configuration files
 │   ├── base.yaml           # Base configuration
 │   ├── cifar10.yaml        # CIFAR-10 specific config
 │   ├── emnist.yaml         # EMNIST specific config
+│   ├── femnist.yaml        # EMNIST specific config
 │   ├── reddit.yaml         # Reddit specific config
 │   ├── sentiment140.yaml   # Sentiment140 specific config
-│   ├── atk_config/         # Attack configurations
-│   └── hydra/              # Hydra configuration
+│   └── atk_config/         # Attack configurations
 ├── backfed/                # Core framework
 │   ├── clients/            # Client implementations
 │   ├── servers/            # Server implementations

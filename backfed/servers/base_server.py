@@ -16,7 +16,7 @@ from rich.progress import track
 from hydra.utils import instantiate
 from backfed.client_manager import ClientManager
 from backfed.clients import RedditMaliciousClient, SentimentMaliciousClient
-from backfed.datasets import FL_DataLoader, nonIID_Dataset
+from backfed.datasets import FL_DataLoader, nonIID_Dataset, check_download
 from backfed.utils import (
     pool_size_from_resources,
     log, get_console,
@@ -55,27 +55,6 @@ class BaseServer:
         self.server_type = server_type
         self.start_round = 1
         self.config = server_config
-
-        # Initialize poison module (for poisoning) and ContextActor (for resource synchronization between malicious clients)
-        if self.config.no_attack == False:
-            self.atk_config = self.config.atk_config
-            data_poison_method = self.atk_config.data_poison_method
-            self.poison_module : Poison = instantiate(
-                config=self.atk_config.data_poison_config[data_poison_method],
-                params=self.atk_config,
-                _recursive_=False # Avoid recursive instantiation
-            )
-
-            if self.config.training_mode == "parallel":
-                self.context_actor = ContextActor.remote()
-                self.poison_module.set_device(self.device) # Set device for poison module since it is initialized on the server
-            else:
-                self.context_actor = None
-
-        else:
-            self.atk_config = None
-            self.poison_module = None
-            self.context_actor = None
         
         # Normalization
         if self.config.dataset.upper() not in ["SENTIMENT140", "REDDIT"] and self.config.normalize:
@@ -100,6 +79,9 @@ class BaseServer:
 
         # Initialize the trainer
         self._init_trainer()
+        
+        # Initialize poison module to share among malicious clients
+        self._init_poison_module()
 
         # Initialize tracking
         if self.config.save_logging in ["wandb", "both"]:
@@ -121,6 +103,27 @@ class BaseServer:
         if self.config.plot_data_distribution:
             self.fl_dataloader.visualize_dataset_distribution(malicious_clients=self.client_manager.get_malicious_clients(), save_path=self.config.output_dir)
 
+    def _init_model(self):
+        """
+        Get the initial model.
+        """
+        if self.config.checkpoint:
+            checkpoint = self._load_checkpoint()
+            self.global_model = get_model(model_name=self.config.model, num_classes=self.config.num_classes, dataset_name=self.config.dataset)
+            self.global_model.load_state_dict(checkpoint['model_state'], strict=True)
+            self.start_round = checkpoint['server_round'] + 1
+
+        elif self.config.pretrain_model_path != None:
+            self.global_model = get_model(model_name=self.config.model, num_classes=self.config.num_classes, dataset_name=self.config.dataset, pretrain_model_path=self.config.pretrain_model_path)
+
+        else:
+            self.global_model = get_model(model_name=self.config.model, num_classes=self.config.num_classes, dataset_name=self.config.dataset)
+
+        self.global_model = self.global_model.to(self.device)
+
+        if self.config.wandb.save_model == True and self.config.wandb.save_model_round == -1:
+            self.config.wandb.save_model_round = self.start_round + self.config.num_rounds
+            
     def _init_client_manager(self, config, start_round):
         # Get benign_client_class and malicious_client_class
         benign_client_class = BenignClient
@@ -166,9 +169,32 @@ class BaseServer:
                 )
             )
 
+    def _init_poison_module(self):
+        # Initialize poison module (for poisoning) and ContextActor (for resource synchronization between malicious clients)
+        if self.config.no_attack == False:
+            self.atk_config = self.config.atk_config
+            data_poison_method = self.atk_config.data_poison_method
+            self.poison_module : Poison = instantiate(
+                config=self.atk_config.data_poison_config[data_poison_method],
+                params=self.atk_config,
+                _recursive_=False # Avoid recursive instantiation
+            )
+
+            if self.config.training_mode == "parallel":
+                self.context_actor = ContextActor.remote()
+                self.poison_module.set_device(self.device) # Set device for poison module since it is initialized on the server
+            else:
+                self.context_actor = None
+
+        else:
+            self.atk_config = None
+            self.poison_module = None
+            self.context_actor = None
+
     def _prepare_dataset(self):
         self.fl_dataloader = FL_DataLoader(config=self.config)
         if self.config.dataset.upper() in ["REDDIT", "FEMNIST", "SENTIMENT140"]:
+            check_download(self.config.dataset.upper())
             self.trainset, self.client_data_indices, self.testset = None, None, nonIID_Dataset(dataset_name=self.config.dataset, config=self.config, client_id=-1)
         else:
             self.trainset, self.client_data_indices, self.testset = self.fl_dataloader.prepare_dataset() 
@@ -179,27 +205,6 @@ class BaseServer:
                                     pin_memory=self.config.pin_memory,
                                     shuffle=False
                                 )
-
-    def _init_model(self):
-        """
-        Get the initial model.
-        """
-        if self.config.checkpoint:
-            checkpoint = self._load_checkpoint()
-            self.global_model = get_model(model_name=self.config.model, num_classes=self.config.num_classes, dataset_name=self.config.dataset)
-            self.global_model.load_state_dict(checkpoint['model_state'], strict=True)
-            self.start_round = checkpoint['server_round'] + 1
-
-        elif self.config.pretrain_model_path != None:
-            self.global_model = get_model(model_name=self.config.model, num_classes=self.config.num_classes, dataset_name=self.config.dataset, pretrain_model_path=self.config.pretrain_model_path)
-
-        else:
-            self.global_model = get_model(model_name=self.config.model, num_classes=self.config.num_classes, dataset_name=self.config.dataset)
-
-        self.global_model = self.global_model.to(self.device)
-
-        if self.config.wandb.save_model == True and self.config.wandb.save_model_round == -1:
-            self.config.wandb.save_model_round = self.start_round + self.config.num_rounds
 
     def _load_checkpoint(self):
         """
@@ -594,8 +599,7 @@ class BaseServer:
             }
         elif issubclass(client_type, MaliciousClient):
             assert self.poison_module is not None, "Poison module is not initialized"
-            if self.config.training_mode == "parallel":
-                assert self.context_actor is not None, "Context actor is not initialized"
+            assert self.context_actor is not None, "Context actor is not initialized"
 
             model_poison_method = self.atk_config.model_poison_method
             model_poison_kwargs = {k:v for k,v in self.atk_config.model_poison_config[model_poison_method].items() if k != "_target_"}
@@ -732,7 +736,7 @@ class FLTrainer:
         self.mode = mode
 
         if self.mode == "sequential":
-            self.worker = ClientApp(**clientapp_init_args) # Only one worker
+            self.workers : List[ClientApp] = [ClientApp(**clientapp_init_args) for _ in range(self.server.config.num_clients)]
         elif self.mode == "parallel":
             ray_client = ray.remote(ClientApp).options(
                 num_cpus=self.server.config.num_cpus,
@@ -771,7 +775,7 @@ class FLTrainer:
         for client_cls in clients_mapping.keys():
             init_args, train_package = self.server.train_package(client_cls)
             for client_id in clients_mapping[client_cls]:
-                client_package = self.worker.train(client_cls=client_cls,
+                client_package = self.workers[client_id].train(client_cls=client_cls,
                     client_id=client_id,
                     init_args=init_args,
                     train_package=train_package
@@ -871,7 +875,7 @@ class FLTrainer:
         for client_cls in clients_mapping.keys():
             test_package = self.server.test_package(client_cls)
             for client_id in clients_mapping[client_cls]:
-                client_package = self.worker.evaluate(test_package=test_package)
+                client_package = self.workers[client_id].evaluate(test_package=test_package)
 
                 # Check if the client failed
                 if isinstance(client_package, dict) and client_package.get("status") == "failure":
@@ -967,7 +971,7 @@ class FLTrainer:
         for client_cls in clients_mapping.keys():
             init_args, exec_package = package_func(client_cls)
             for client_id in clients_mapping[client_cls]:
-                package = getattr(self.worker, func_name)(
+                package = getattr(self.workers[client_id], func_name)(
                     client_cls=client_cls,
                     client_id=client_id,
                     init_args=init_args,

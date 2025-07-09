@@ -9,7 +9,7 @@ class FEMNIST(MNIST):
     def __init__(self, root, train=True, transform=None, target_transform=None, download=False):
         super(MNIST, self).__init__(root, transform=transform, target_transform=target_transform)
         self.download = download
-        self.download_link = 'https://drive.google.com/file/d/17Onhjhox6YRUlEIU3e_73OKpT3cWBAxN'
+        self.download_link = 'https://drive.google.com/file/d/1ET-CYDJf2l8uRnWh-NRE3iIQBeZN5nC0'
         self.file_md5 = 'a8a28afae0e007f1acb87e37919a21db'
         self.train = train
         self.root = root
@@ -61,10 +61,10 @@ class FEMNIST(MNIST):
         os.remove(f'{self.root}/FEMNIST.tar.gz')
 
 def get_femnist_dataset(client_id):
-    if client_id == -1:
+    if client_id != -1:
         path = f"data/FEMNIST/femnist_train/{client_id}.pt"
     else:
-        path = "data/FEMNIST/femnist_test.pth"
+        path = "data/FEMNIST/femnist_test.pt"
     
     data = torch.load(path, weights_only=False)
     dataset = TensorDataset(data[0], data[1])

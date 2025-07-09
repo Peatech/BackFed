@@ -44,18 +44,19 @@ def download(dataset_name:str) -> bool:
     file_name = f'{dataset_name}.tar.gz'
     
     if dataset_name == "FEMNIST":
-        download_link = "https://drive.google.com/file/d/17ZiNgCqR3d2iZnknIB3RfnuwOEk75E4e"
+        download_link = "https://drive.google.com/file/d/1ET-CYDJf2l8uRnWh-NRE3iIQBeZN5nC0"
     elif dataset_name == "REDDIT":
-        download_link = "https://drive.google.com/file/d/1EjC05JfhHob_pDToOzuRvxuf1lZj8n_V"
+        download_link = "https://drive.google.com/file/d/1fOrfEERd1pTddJ90h6arI_Nu5Q1YBZWQ"
     elif dataset_name == "SENTIMENT140":
-        download_link = "https://drive.google.com/file/d/1S_tA6wp8cIor_M5n4-Do6iSZIS8OA6wO"
+        download_link = "https://drive.google.com/file/d/1HYYYDJlLHou8RaRv9Xrg_vK0f_hBmZy1"
         
     utils.download_and_extract_archive(
         download_link,
         path,
         filename=file_name,
-        md5=file_name.split(".")[0],
+        remove_finished=True
     )
+    
     return False
     
 class nonIID_Dataset(Dataset):

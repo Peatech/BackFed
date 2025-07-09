@@ -1,7 +1,7 @@
 ---
 # *Information passed from parent config
-dataset: ${dataset} # Specific version of EMNIST dataset, e.g., EMNIST_BYCLASS, EMNIST_BYMERGE, etc.
-num_classes: ${num_classes} # Number of classes in the dataset
+dataset: FEMNIST
+num_classes: 62
 
 # *Poison method
 data_poison_method: pattern # Choose from the key in data_poison below
