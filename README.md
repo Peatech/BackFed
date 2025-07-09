@@ -1,3 +1,4 @@
+![logo](backfed_logo.png)
 # BackFed: An Efficient & Standardized Benchmark Suite for Backdoor Attacks in Federated Learning
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
