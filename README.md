@@ -300,6 +300,10 @@ Check the `experiments/` directory for example scripts:
 - `sentiment140.sh`: Sentiment140 dataset experiments
 - `weakdp_study.sh`: Differential privacy defense studies
 
+## Acknowledgements
++ Ray Backend follows the implementation of [FL-Bench](https://github.com/KarhouTam/FL-bench)
++ Attacks in NLP [Backdoors101](https://github.com/ebagdasa/backdoors101)
++ [BackdoorIndicator](https://github.com/ybdai7/Backdoor-indicator-defense)
 
 ## Contributing
 
