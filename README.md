@@ -232,21 +232,21 @@ The framework uses Hydra for configuration management. Below are the key configu
 | Defense | Category | Description | Source |
 |---------|----------|-------------|-----------------|
 | **FedProx** | Client-side | Adds proximal term to client optimization | [FedProx](https://arxiv.org/abs/1812.06127) |
-| **LocalDP** | Client-side | Adds DP noise at client-side after training | [FedProx](https://arxiv.org/abs/1812.06127) |
+| **LocalDP** | Client-side | Adds DP noise at client-side after training | [FedProx](https://arxiv.org/abs/2007.15789) |
 | **TrimmedMean** | Robust Aggregation | Removes extreme updates before aggregation | [Byzantine-Robust](https://arxiv.org/abs/1703.02757) |
 | **MultiKrum** | Robust Aggregation | Selects subset of updates closest to each other | [Krum](https://arxiv.org/abs/1703.02757) |
 | **GeometricMedian** | Robust Aggregation | Uses geometric median for aggregation | [Geometric Median](https://arxiv.org/abs/1803.01498) |
 | **CoordinateMedian** | Robust Aggregation | Uses coordinate-wise median aggregation | [Coordinate-wise](https://arxiv.org/abs/1803.01498) |
 | **FLTrust** | Robust Aggregation | Trust-based weighted aggregation with server dataset | [FLTrust](https://arxiv.org/abs/2012.13995) |
-| **RobustLR** | Robust Aggregation | Adaptive learning rate based on update trustworthiness | - |
+| **RobustLR** | Robust Aggregation | Adaptive learning rate based on update trustworthiness | [RobustLR](https://arxiv.org/pdf/2007.03767) |
 | **FoolsGold** | Anomaly Detection | Detects sybil attacks via update similarity | [FoolsGold](https://arxiv.org/abs/1808.04866) |
 | **DeepSight** | Anomaly Detection | Clustering-based backdoor detection | [DeepSight](https://arxiv.org/abs/2201.00763) |
-| **RFLBAT** | Anomaly Detection | PCA-based malicious update detection | [RFLBAT](https://arxiv.org/abs/2007.06459) |
-| **FLDetector** | Anomaly Detection | Sliding window approach for anomaly detection | [FLDetector](https://arxiv.org/abs/2007.07113) |
-| **FLARE** | Anomaly Detection | MMD-based anomaly detection with trust scores | [FLARE](https://arxiv.org/abs/2201.10025) |
-| **Indicator** | Anomaly Detection | Statistical anomaly detection method | - |
+| **RFLBAT** | Anomaly Detection | PCA-based malicious update detection | [RFLBAT](https://arxiv.org/abs/2201.03772) |
+| **FLDetector** | Anomaly Detection | Sliding window approach for anomaly detection | [FLDetector](https://arxiv.org/pdf/2207.09209) |
+| **FLARE** | Anomaly Detection | MMD-based anomaly detection with trust scores | [FLARE](https://dl.acm.org/doi/10.1145/3488932.3517395) |
+| **Indicator** | Anomaly Detection | Statistical anomaly detection method | [Indicator](https://www.usenix.org/system/files/usenixsecurity24-li-songze.pdf) |
 | **FLAME** | Anomaly Detection | Clustering, norm clipping, and noise addition | [FLAME](https://arxiv.org/abs/2101.02281) |
-| **WeakDP** | Post-aggregation | Clip aggregated model and add noise | [DP-SGD](https://arxiv.org/abs/1607.00133) |
+| **WeakDP** | Post-aggregation | Clip aggregated model and add noise | [WeakDP](https://arxiv.org/abs/1911.07963) |
 
 
 ## Examples
