@@ -9,6 +9,7 @@ import glob
 import time
 import copy
 
+from hydra.utils import get_class
 from torch.utils.data import DataLoader
 from logging import ERROR
 from ray.actor import ActorHandle
@@ -101,7 +102,9 @@ class BaseServer:
             self.client_manager.visualize_client_selection(save_path=self.config.output_dir)
 
         if self.config.plot_data_distribution:
-            self.fl_dataloader.visualize_dataset_distribution(malicious_clients=self.client_manager.get_malicious_clients(), save_path=self.config.output_dir)
+            self.fl_dataloader.visualize_dataset_distribution(malicious_clients=self.client_manager.get_malicious_clients(), 
+                                                              save_path=self.config.output_dir
+                                                            )
 
     def _init_model(self):
         """
@@ -125,18 +128,20 @@ class BaseServer:
             self.config.wandb.save_model_round = self.start_round + self.config.num_rounds
             
     def _init_client_manager(self, config, start_round):
-        # Get benign_client_class and malicious_client_class
-        benign_client_class = BenignClient
+        log(INFO, "Initializing client manager...")
         
+        # Get benign_client_class from config
+        benign_client_class = get_class(config.benign_client_class)
+        log(INFO, f"Loaded benign client class: {config.benign_client_class}")
+
+        # Get malicious_client_class from config
         if not self.config.no_attack:
-            if self.config.dataset.upper() == "SENTIMENT140":
-                malicious_client_class = SentimentMaliciousClient
-            elif self.config.dataset.upper() == "REDDIT":
-                malicious_client_class = RedditMaliciousClient
-            else:
-                malicious_client_class = MaliciousClient
+            model_poison_method = config.atk_config.model_poison_config[config.atk_config.model_poison_method]
+            malicious_client_class = get_class(model_poison_method._target_)
+            log(INFO, f"Loaded malicious client class: {model_poison_method._target_}")
         else:
             malicious_client_class = None
+            log(INFO, "No attack mode enabled, malicious client class set to None")
         
         self.client_manager = ClientManager(config, benign_client_class=benign_client_class, malicious_client_class=malicious_client_class, start_round=start_round)
         self.rounds_selection = self.client_manager.get_rounds_selection()

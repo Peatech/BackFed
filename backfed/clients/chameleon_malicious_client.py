@@ -21,7 +21,7 @@ DEFAULT_PARAMS = {
     "poisoned_supcon_weight_decay": 0.0005,
     "poisoned_supcon_milestones": [2, 4, 6, 8],
     "poisoned_supcon_lr_gamma": 0.3,
-    "fac_scale_weight": 2,
+    "fac_scale_weight": 6,
 }
 
 class ChameleonClient(MaliciousClient):

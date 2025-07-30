@@ -116,10 +116,22 @@ data_poison_config:
     atk_eps: 0.3
     atk_lr: 0.01
 
+  reddit_poison_lstm:
+    _target_: backfed.poisons.RedditPoisonLSTM
+
+  sentiment_poison_bert:
+    _target_: backfed.poisons.SentimentPoisonBert
+
 ### Model poisoning configuration
 model_poison_config:
   base:
     _target_: backfed.clients.MaliciousClient
+
+  reddit_malicious:
+    _target_: backfed.clients.RedditMaliciousClient
+
+  sentiment_malicious:
+    _target_: backfed.clients.SentimentMaliciousClient
 
   chameleon: # Chameleon is a poison wrapper
     _target_: backfed.clients.ChameleonClient

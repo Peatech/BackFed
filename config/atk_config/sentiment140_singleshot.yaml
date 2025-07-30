@@ -14,8 +14,8 @@ poison_sentence: I am an african american
 poison_rate: 1.0
 
 # *Poison method
-data_poison_method: base # Choose from the key in data_poison below
-model_poison_method: base # Choose from the key in model_poison below
+data_poison_method: sentiment_poison_bert # Choose from the key in data_poison below
+model_poison_method: sentiment_malicious # Choose from the key in model_poison below
 
 # *Training settings
 use_atk_optimizer: False # If False, use the same optimizer (including learning rate) as other clients
@@ -63,10 +63,10 @@ selection_scheme: "random"
 # *Poison configuration
 ### Data poisoning configuration
 data_poison_config:
-  base:
+  sentiment_poison_bert:
     _target_: backfed.poisons.SentimentPoisonBert
 
 ### Model poisoning configuration
 model_poison_config:
-  base:
+  sentiment_malicious:
     _target_: backfed.clients.SentimentMaliciousClient

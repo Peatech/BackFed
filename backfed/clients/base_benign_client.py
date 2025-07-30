@@ -23,6 +23,7 @@ class BenignClient(BaseClient):
         model,
         client_config,
         client_type: str = "base_benign",
+        verbose: bool = False,
         **kwargs
     ):
         """

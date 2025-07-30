@@ -35,6 +35,7 @@ class MaliciousClient(BaseClient):
         poison_module: Poison,
         context_actor: Optional[ContextActor],
         client_type: str = "base_malicious",
+        verbose: bool = False,
         **kwargs
     ):
         """
@@ -68,7 +69,7 @@ class MaliciousClient(BaseClient):
             model=model,
             client_config=client_config,
             client_type=client_type,
-            **kwargs
+            verbose=verbose,
         )
 
         self.poison_module.set_client_id(self.client_id)

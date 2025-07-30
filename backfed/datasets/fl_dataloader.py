@@ -11,13 +11,37 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pickle
 
-from torch.utils.data import Dataset, DataLoader
+from omegaconf import OmegaConf
+from torch.utils.data import Dataset
 from logging import INFO
 from backfed.utils import log
 from typing import Dict, List, Tuple
 from torchvision import datasets
 from collections import defaultdict
 from tinyimagenet import TinyImageNet
+
+def make_hashable(x):
+    if isinstance(x, dict):
+        return tuple(sorted((k, make_hashable(v)) for k, v in x.items()))
+    if isinstance(x, (list, tuple, set)):
+        return tuple(make_hashable(i) for i in x)
+    return x
+
+def hash_selected_keys(cfg, keys):
+    root = OmegaConf.to_container(cfg, resolve=True)
+    pairs = []
+    for key in keys:
+        d, ok = root, True
+        for part in key.split('.'):
+            if isinstance(d, dict) and part in d:
+                d = d[part]
+            else:
+                ok = False
+                break
+        if ok:
+            pairs.append((key, make_hashable(d)))
+
+    return hash(tuple(sorted(pairs)))
 
 class FL_DataLoader:
     """
@@ -161,30 +185,23 @@ class FL_DataLoader:
         # Initialize trainset and testset
         self.load_dataset(dataset_name=self.config["dataset"].upper())
         
-        # Create directory for caching data splits
-        os.makedirs("data_splits", exist_ok=True)
-
-        # Create a unique filename based on configuration parameters
-        load_split_file = f"{self.config.dataset}_{self.config.num_clients}_{self.config.no_attack}_{self.config.atk_config.mutual_dataset}_{self.config.atk_config.num_attacker_samples}"
-        load_split_file += f"_{self.config.partitioner}" if self.config.partitioner == "uniform" else f"_{self.config.partitioner}_{self.config.alpha}"
-
-        # Add debug info to filename if in debug mode
-        if hasattr(self.config, 'debug') and self.config.debug:
-            load_split_file += f"_debug={self.config.debug}_fraction={self.config.debug_fraction_data}"
-
-        # Add random seed to filename if available for reproducibility
-        if hasattr(self.config, 'seed'):
-            load_split_file += f"_seed={self.config.seed}"
-
-        # Full path to the cache file
-        cache_file_path = os.path.join("data_splits", load_split_file + ".pkl")
+        if not self.config.debug:
+            distribution_keys = ["partitioner"] if self.config.partitioner == "uniform" else ["partitioner", "alpha"]
+            keys = ["dataset", *distribution_keys, "num_clients", "seed"]
+            if not self.config.no_attack:
+                keys.append("atk_config.malicious_clients")
+                if self.config.atk_config.mutual_dataset:
+                    keys.append("atk_config.num_attacker_samples")
+                    
+            hash_value = hash_selected_keys(self.config, keys)
+            cache_file_path = os.path.join("data_splits", f"{hash_value}.pkl")
 
         # Try to load from cache if it exists
         if os.path.exists(cache_file_path):
             try:
                 with open(cache_file_path, 'rb') as f:
                     self.client_data_indices = pickle.load(f)
-                log(INFO, f"Loaded client data indices from {load_split_file + '.pkl'}")
+                log(INFO, f"Loaded client data indices from {cache_file_path}")
             except (pickle.PickleError, EOFError) as e:
                 log(INFO, f"Error loading cached data split: {e}. Regenerating...")
                 os.remove(cache_file_path)  # Remove corrupted cache file
@@ -195,10 +212,11 @@ class FL_DataLoader:
             
         return self.trainset, self.client_data_indices, self.testset
 
-    def _sample_dirichlet(self, no_participants, indices=None) -> Dict[int, List[int]]:
+    def _sample_dirichlet(self, cids, indices=None) -> Dict[int, List[int]]:
         """
         Dirichlet data distribution for each participant.
         """
+        no_participants = len(cids)
         if indices is None:
             indices = list(range(len(self.trainset)))  # Sample all the indices
 
@@ -237,7 +255,6 @@ class FL_DataLoader:
                     class_indices[label] = [ind]
 
         per_participant_list = defaultdict(list)
-        clients = list(range(no_participants))
 
         for class_idx in class_indices.keys():
             random.shuffle(class_indices[class_idx])
@@ -245,12 +262,12 @@ class FL_DataLoader:
             sampled_probabilities = np.random.dirichlet(
                 np.array(no_participants * [self.config.alpha]))
             per_client_size = [round(sampled_probabilities[cid] * class_size) for cid in range(no_participants)]
-            random.shuffle(clients)
+            random.shuffle(cids)
 
-            for cid in range(len(clients)):
-                no_imgs = per_client_size[cid] if cid != no_participants - 1 else len(class_indices[class_idx])
+            for idx, cid in enumerate(cids):
+                no_imgs = per_client_size[idx] if idx != no_participants - 1 else len(class_indices[class_idx])
                 sampled_list = class_indices[class_idx][:no_imgs]
-                per_participant_list[clients[cid]].extend(sampled_list)
+                per_participant_list[cid].extend(sampled_list)
                 class_indices[class_idx] = class_indices[class_idx][no_imgs:]
 
         return per_participant_list
@@ -266,29 +283,37 @@ class FL_DataLoader:
         if not self.config.no_attack and self.config.atk_config.mutual_dataset:
             # Split the dataset into two subsets: clean and attacker-controlled samples
             indices = list(range(len(self.trainset)))
-            attacker_indices = np.random.choice(indices, self.config.atk_config.num_attacker_samples, replace=False)
+            attacker_indices = random.sample(indices, self.config.atk_config.num_attacker_samples)
             sample_indices = [i for i in indices if i not in attacker_indices]
+            sample_cids = self.config.benign_clients
         else:
             attacker_indices = None
             sample_indices = list(range(len(self.trainset)))
+            sample_cids = list(range(self.config.num_clients))
 
         # Handle debug mode
         if hasattr(self.config, 'debug') and self.config.debug:
             assert self.config.dataset.upper() not in ["REDDIT", "SENTIMENT140"], "Debug mode only works for CV datasets"
-            sample_indices = np.random.choice(sample_indices, int(self.config.debug_fraction_data * len(sample_indices)), replace=False)
+            sample_indices = random.sample(sample_indices, int(self.config.debug_fraction_data * len(sample_indices)))
 
         # Generate data split based on partitioning strategy
         if self.config.partitioner == "dirichlet":
             self.client_data_indices = self._sample_dirichlet(
-                no_participants=self.config.num_clients,
+                cids=sample_cids,
                 indices=sample_indices)
         elif self.config.partitioner == "uniform":
             self.client_data_indices = self._sample_uniform(
-                no_participants=self.config.num_clients,
+                cids=sample_cids,
                 indices=sample_indices)
         else:
             raise ValueError(f"Partitioner {self.config.partitioner} is not supported.")
 
+        if attacker_indices is not None:
+            # Add attacker indices to the client data indices
+            for atk_id in self.config.atk_config.malicious_clients:
+                assert atk_id not in self.client_data_indices, f"Attacker client {atk_id} already exists in client_data_indices"
+                self.client_data_indices[atk_id] = attacker_indices
+ 
         # Cache the generated data split
         try:
             with open(cache_file_path, 'wb') as f:
@@ -297,10 +322,11 @@ class FL_DataLoader:
         except Exception as e:
             log(INFO, f"Error caching data split: {e}")
 
-    def _sample_uniform(self, no_participants, indices=None) -> Dict[int, List[int]]:
+    def _sample_uniform(self, cids, indices=None) -> Dict[int, List[int]]:
         """
         Uniform data distribution for each participant.
         """
+        no_participants = len(cids)
         if indices is None:
             indices = list(range(len(self.trainset)))  # Sample all the indices
 
@@ -339,18 +365,17 @@ class FL_DataLoader:
                     class_indices[label] = [ind]
 
         per_participant_list = defaultdict(list)
-        clients = list(range(no_participants))
 
         for class_idx in class_indices.keys():
             random.shuffle(class_indices[class_idx])
             class_size = len(class_indices[class_idx])
             per_client_size = round(class_size / no_participants)
-            random.shuffle(clients)
+            random.shuffle(cids)
 
-            for cid in range(len(clients)):
-                no_imgs = per_client_size if cid != no_participants - 1 else len(class_indices[class_idx])
+            for idx, cid in enumerate(cids):
+                no_imgs = per_client_size if idx != no_participants - 1 else len(class_indices[class_idx])
                 sampled_list = class_indices[class_idx][:no_imgs]
-                per_participant_list[clients[cid]].extend(sampled_list)
+                per_participant_list[cid].extend(sampled_list)
                 class_indices[class_idx] = class_indices[class_idx][no_imgs:]
 
         return per_participant_list
@@ -420,10 +445,10 @@ class FL_DataLoader:
         # Determine the number of classes
         if hasattr(dataset, 'class_to_idx'):
             # Standard torchvision datasets
-            class_indices = list(dataset.class_to_idx.values())
+            class_indices = sorted(list(dataset.class_to_idx.values()))
         elif hasattr(dataset, 'data') and 'target' in dataset.data.columns:
             # Sentiment140 dataset
-            class_indices = dataset.data['target'].unique().tolist()
+            class_indices = sorted(dataset.data['target'].unique().tolist())
         else:
             # Try to infer from the data
             try:
@@ -431,17 +456,21 @@ class FL_DataLoader:
                 targets = [dataset[i][1] for i in range(min(100, len(dataset)))]
                 if isinstance(targets[0], torch.Tensor):
                     targets = [t.item() for t in targets]
-                class_indices = list(set(targets))
+                class_indices = sorted(list(set(targets)))
             except:
                 # Fallback to binary classification
                 class_indices = [0, 1]
 
+        # Sort client IDs to ensure consistent ordering from 0
+        sorted_client_ids = sorted(client_data_indices.keys())
+        num_clients = len(sorted_client_ids)
+        
         # Initialize counts dictionary with class indices as keys
-        class_counts = {idx: [0 for _ in range(len(client_data_indices))] for idx in class_indices}
+        class_counts = {idx: [0 for _ in range(num_clients)] for idx in class_indices}
 
-        # Count samples per class per client
-        for client_id, client_idx in client_data_indices.items():
-            for idx in client_idx:
+        # Count samples per class per client  
+        for client_idx, (client_id, data_indices) in enumerate(sorted(client_data_indices.items())):
+            for idx in data_indices:
                 # Get the target based on the dataset type
                 if hasattr(dataset, 'targets'):
                     # Standard torchvision datasets
@@ -458,6 +487,6 @@ class FL_DataLoader:
                         target = target.item()
 
                 if target in class_counts:
-                    class_counts[target][client_id] += 1
+                    class_counts[target][client_idx] += 1
 
-        return class_counts, client_data_indices.keys()
+        return class_counts, sorted_client_ids

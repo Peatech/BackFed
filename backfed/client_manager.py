@@ -40,8 +40,7 @@ class ClientManager:
         else:
             log(INFO, f"ClientManager: Attack is enabled, initialize rounds selection with {self.atk_config.poison_frequency} poison scheme and {self.atk_config.selection_scheme} selection scheme")
             self.malicious_clients = self.atk_config.malicious_clients
-            malicious_set = set(self.malicious_clients)
-            self.benign_clients = [i for i in range(self.config.num_clients) if i not in malicious_set]
+            self.benign_clients = self.config.benign_clients
 
             if self.start_round > self.atk_config.poison_end_round or self.start_round + self.config.num_rounds < self.atk_config.poison_start_round:
                 log(WARNING, f"Training rounds [{self.start_round} - {self.start_round + self.config.num_rounds}] are out of scope for the attack range [{self.atk_config.poison_start_round} - {self.atk_config.poison_end_round}]. No attack will be applied.")
@@ -234,17 +233,17 @@ class ClientManager:
         """Get the number of clients per round."""
         return self.config.num_clients_per_round
 
-    def visualize_client_selection(self, start_round=-1, end_round=-1, interval=2, only_poison_rounds=False, save_path=None):
+    def visualize_client_selection(self, start_round=-1, end_round=-1, interval=2, only_poison_rounds=True, save_path=None):
         """
         Plot a heatmap showing client selection over communication rounds. Malicious clients and poisoned rounds are highlighted in red.
         """
         if end_round == -1:
-            end_round = max(list(self.selection_history.keys()))
+            end_round = max(list(self.rounds_selection.keys()))
         if start_round == -1:
             start_round = max(1, end_round - 100)  # Default to 100 rounds before the last round
 
         if only_poison_rounds:
-            selected_rounds = list(self.get_poison_rounds().keys())
+            selected_rounds = self.get_poison_rounds()
         else:
             selected_rounds = list(range(start_round, end_round + 1, interval))
 
@@ -255,8 +254,12 @@ class ClientManager:
         data = np.zeros((num_clients, num_rounds))
 
         for idx, r in enumerate(selected_rounds):
-            if r in self.selection_history:
-                selected_clients = np.array(self.selection_history[r])
+            if r in self.rounds_selection:
+                # Extract all client IDs from all client classes in this round
+                selected_clients = []
+                for client_class, clients in self.rounds_selection[r].items():
+                    selected_clients.extend(clients)
+                selected_clients = np.array(selected_clients, dtype=int)
                 data[selected_clients, idx] = 1  # Highlight selected clients
 
         fig_width = num_rounds   # Width scales with the number of clients
@@ -277,7 +280,7 @@ class ClientManager:
         # Plot the heatmap using Seaborn
         plt.figure(figsize=(fig_width, fig_height))
 
-        poisoned_rounds = list(self.get_poison_rounds().keys())
+        poisoned_rounds = self.get_poison_rounds()  # This returns a list, not a dict
         malicious_clients = self.get_malicious_clients()
 
         # Create a custom colormap
@@ -290,8 +293,14 @@ class ClientManager:
             client_id = int(client.split(" ")[1])
             if client_id in malicious_clients:
                 for j, round_name in enumerate(df.columns):
-                    if int(round_name) in poisoned_rounds and client_id in self.selection_history[int(round_name)]:
-                        mask[i, j] = True  # Mark cells to be highlighted in red
+                    round_num = int(round_name)
+                    if round_num in poisoned_rounds and round_num in self.rounds_selection:
+                        # Check if client_id is in any of the client lists for this round
+                        round_clients = []
+                        for client_class, clients in self.rounds_selection[round_num].items():
+                            round_clients.extend(clients)
+                        if client_id in round_clients:
+                            mask[i, j] = True  # Mark cells to be highlighted in red
 
         # Plot heatmap with masked cells highlighted in red
         sns.heatmap(df, cmap=cmap, cbar=False, linewidths=.5, linecolor='lightgrey', mask=mask, vmin=0, vmax=1)

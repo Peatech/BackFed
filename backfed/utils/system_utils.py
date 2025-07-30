@@ -99,10 +99,17 @@ def set_attack_config(config: DictConfig):
             config.atk_config.malicious_clients = [0]  # Default to client 0
         # Keep only the first client in the list
         config.atk_config.malicious_clients = [config.atk_config.malicious_clients[0]]
+    elif config.atk_config.adversary_selection == "fixed":
+        config.atk_config.malicious_clients = config.atk_config.malicious_clients
+        config.atk_config.fraction_adversaries = len(config.atk_config.malicious_clients) / config.num_clients
+    else:
+        raise ValueError(f"Unknown adversary selection method: {config.atk_config.adversary_selection}")
+        
     # For "fixed", we keep the malicious_clients list as is
-
     log(INFO, f"Malicious clients: {config.atk_config.malicious_clients}")
-
+    malicious_set = set(config.atk_config.malicious_clients)
+    config.benign_clients = [i for i in range(config.num_clients) if i not in malicious_set]
+    
     # Define target and source class if random_class is True
     if config.atk_config.random_class and config.atk_config.attack_type != "all2all":
         config.atk_config.target_class = random.randint(0, config.num_classes - 1)
