@@ -33,15 +33,15 @@ download_model() {
             google_drive_id="1oGGXEGf9FtgZA7dPZvMuGzFXS2TsSKdY"
             ;;
         "emnist")
-            model_path="checkpoints/EMNIST_BYCLASS_unweighted_fedavg"
+            model_path="EMNIST_BYCLASS_unweighted_fedavg"
             google_drive_id="1bALJ9oxBjz4-GOwZy0zF9epIZkMOHNk8"
             ;;
         "femnist")
-            model_path="checkpoints/EMNIST_BYCLASS_unweighted_fedavg"
+            model_path="EMNIST_BYCLASS_unweighted_fedavg"
             google_drive_id="1bALJ9oxBjz4-GOwZy0zF9epIZkMOHNk8"
             ;;
         "mnist")
-            model_path="checkpoints/EMNIST_BYCLASS_unweighted_fedavg"
+            model_path="EMNIST_BYCLASS_unweighted_fedavg"
             google_drive_id="1bALJ9oxBjz4-GOwZy0zF9epIZkMOHNk8"
             ;;
         "tinyimagenet")
@@ -63,10 +63,13 @@ download_model() {
     esac
     
     if [ ! -d "$model_path" ]; then
-        echo "Downloading $dataset models..."
-        gdown "$google_drive_id" -O "${dataset}_models.zip"
-        unzip "${dataset}_models.zip"
-        rm "${dataset}_models.zip"
+        echo "Downloading $dataset models from Google Drive folder..."
+        # Download the entire folder - gdown will create a directory with the folder contents
+        gdown --folder "https://drive.google.com/drive/folders/$google_drive_id"
+        
+        # The folder might be downloaded with a different name, so we may need to rename it
+        # This depends on how the folder is structured in Google Drive
+        echo "Download completed. You may need to manually rename the downloaded folder to: $model_path"
     else
         echo "$dataset models already exist, skipping..."
     fi

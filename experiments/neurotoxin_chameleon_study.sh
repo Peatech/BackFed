@@ -1,0 +1,59 @@
+python main.py -cn cifar10\
+    aggregator=unweighted_fedavg \
+    atk_config=cifar10_multishot \
+    atk_config.model_poison_method=base\
+    atk_config.data_poison_method=pattern \
+    atk_config.selection_scheme=single-adversary \
+    atk_config.adversary_selection=single \
+    atk_config.poison_frequency=multi-shot \
+    atk_config.mutual_dataset=True \
+    atk_config.num_attacker_samples=1000 \
+    atk_config.poison_start_round=2001 \
+    atk_config.poison_end_round=2500 \
+    checkpoint=2000 \
+    save_logging=csv \
+    num_rounds=1500 \
+    num_gpus=0.5 \
+    num_cpus=1 \
+    dir_tag=cifar10_fed_avg_vs_attacks \
+    cuda_visible_devices=\"0,1,2,3\"
+
+python main.py -cn cifar10\
+    aggregator=unweighted_fedavg \
+    atk_config=cifar10_multishot \
+    atk_config.model_poison_method=neurotoxin \
+    atk_config.data_poison_method=pattern \
+    atk_config.selection_scheme=single-adversary \
+    atk_config.adversary_selection=single \
+    atk_config.poison_frequency=multi-shot \
+    atk_config.mutual_dataset=True \
+    atk_config.num_attacker_samples=1000 \
+    atk_config.poison_start_round=2001 \
+    atk_config.poison_end_round=2500 \
+    checkpoint=2000 \
+    save_logging=csv \
+    num_rounds=1500 \
+    num_gpus=0.5 \
+    num_cpus=1 \
+    dir_tag=cifar10_fed_avg_vs_attacks \
+    cuda_visible_devices=\"0,1,2,3\"
+
+python main.py -cn cifar10\
+    aggregator=unweighted_fedavg \
+    atk_config=cifar10_multishot \
+    atk_config.model_poison_method=chameleon \
+    atk_config.data_poison_method=pattern \
+    atk_config.selection_scheme=single-adversary \
+    atk_config.adversary_selection=single \
+    atk_config.poison_frequency=multi-shot \
+    atk_config.mutual_dataset=True \
+    atk_config.num_attacker_samples=1000 \
+    atk_config.poison_start_round=2001 \
+    atk_config.poison_end_round=2500 \
+    checkpoint=2000 \
+    save_logging=csv \
+    num_rounds=1500 \
+    num_gpus=0.5 \
+    num_cpus=1 \
+    dir_tag=cifar10_fed_avg_vs_attacks \
+    cuda_visible_devices=\"0,1,2,3\"
