@@ -21,6 +21,39 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
 - **Supported Logging**: WandB for real-time visualization and CSV logging for experiment tracking.
 - **Resource Management**: Efficient GPU and CPU utilization with configurable resource allocation for parallel execution.
 
+
+## Project Structure
+
+```
+FL_BackdoorBench/
+├── config/                 # Configuration files
+│   ├── base.yaml           # Base configuration
+│   ├── cifar10.yaml        # CIFAR-10 specific config
+│   ├── emnist.yaml         # EMNIST specific config
+│   ├── femnist.yaml        # EMNIST specific config
+│   ├── reddit.yaml         # Reddit specific config
+│   ├── sentiment140.yaml   # Sentiment140 specific config
+│   └── atk_config/         # Attack configurations
+├── backfed/                # Core framework
+│   ├── clients/            # Client implementations
+│   ├── servers/            # Server implementations
+│   ├── poisons/            # Poisoning methods
+│   ├── models/             # Model architectures
+│   ├── datasets/           # Dataset handling
+│   ├── utils/              # Utility functions
+│   ├── client_manager.py   # Client management
+│   ├── context_actor.py    # Ray context management
+│   └── fl_dataloader.py    # Federated data loading
+├── experiments/            # Example experiment scripts
+├── data/                   # Raw datasets
+├── data_splits/            # Pre-computed data partitions (for CIFAR10, EMNIST, Tiny-ImageNet)
+├── checkpoints/            # Model checkpoints
+├── csv_results/            # Experiment results
+├── outputs/                # Hydra output logs
+├── main.py                 # Main entry point
+└── requirements.txt         # Python dependencies
+```
+
 ## Installation
 
 ### Prerequisites
@@ -249,6 +282,11 @@ The framework uses Hydra for configuration management. Below are the key configu
 | **WeakDP** | Post-aggregation | Clip aggregated model and add noise | [WeakDP](https://arxiv.org/abs/1911.07963) |
 
 
+### Methods Under Development
+- Client-side defenses: FLIP, FL-WBC.
+- Robust-aggregation defense: FedReDefense.
+- Attacks: 3DFED, F3BA.
+
 ## Examples
 
 Check the `experiments/` directory for example scripts:
@@ -262,37 +300,6 @@ Check the `experiments/` directory for example scripts:
 - `sentiment140.sh`: Sentiment140 dataset experiments
 - `weakdp_study.sh`: Differential privacy defense studies
 
-## Project Structure
-
-```
-FL_BackdoorBench/
-├── config/                 # Configuration files
-│   ├── base.yaml           # Base configuration
-│   ├── cifar10.yaml        # CIFAR-10 specific config
-│   ├── emnist.yaml         # EMNIST specific config
-│   ├── femnist.yaml        # EMNIST specific config
-│   ├── reddit.yaml         # Reddit specific config
-│   ├── sentiment140.yaml   # Sentiment140 specific config
-│   └── atk_config/         # Attack configurations
-├── backfed/                # Core framework
-│   ├── clients/            # Client implementations
-│   ├── servers/            # Server implementations
-│   ├── poisons/            # Poisoning methods
-│   ├── models/             # Model architectures
-│   ├── datasets/           # Dataset handling
-│   ├── utils/              # Utility functions
-│   ├── client_manager.py   # Client management
-│   ├── context_actor.py    # Ray context management
-│   └── fl_dataloader.py    # Federated data loading
-├── experiments/            # Example experiment scripts
-├── data/                   # Raw datasets
-├── data_splits/            # Pre-computed data partitions (for CIFAR10, EMNIST, Tiny-ImageNet)
-├── checkpoints/            # Model checkpoints
-├── csv_results/            # Experiment results
-├── outputs/                # Hydra output logs
-├── main.py                 # Main entry point
-└── requirements.txt         # Python dependencies
-```
 
 ## Contributing
 
