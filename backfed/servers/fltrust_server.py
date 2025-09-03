@@ -26,7 +26,7 @@ class FLTrustServer(RobustAggregationServer):
         for key, param in net_dict.items():
             if any(x in key.split('.')[-1] for x in ['num_batches_tracked', 'running_mean', 'running_var']):
                 continue
-            vec.append(param.view(-1))
+            vec.append(param.reshape(-1))
         return torch.cat(vec)
 
     def aggregate_client_updates(self, client_updates: List[Tuple[int, int, Dict]]) -> bool:
@@ -60,7 +60,8 @@ class FLTrustServer(RobustAggregationServer):
             # Calculate cosine similarity and trust score
             client_cos = F.cosine_similarity(central_vector, local_vector, dim=0)
             client_cos = max(client_cos.item(), 0)
-            client_norm_ratio = central_norm / torch.linalg.norm(local_vector)
+            local_norm = torch.linalg.norm(local_vector).clamp_min(1e-12)
+            client_norm_ratio = central_norm / local_norm
 
             score_list.append(client_cos)
             total_score += client_cos
@@ -80,12 +81,13 @@ class FLTrustServer(RobustAggregationServer):
             return False
 
         # Update global model parameters in-place
-        for key, param in self.global_model_params.items():
-            if key.endswith('num_batches_tracked'):
-                continue
-            else:
-                update = (sum_parameters[key] / total_score)
-                param.add_(update * self.eta)
+        with torch.no_grad():
+            for key, param in self.global_model_params.items():
+                if key.endswith('num_batches_tracked'):
+                    continue
+                else:
+                    update = (sum_parameters[key] / total_score)
+                    param.add_(update * self.eta)
 
         return True
 

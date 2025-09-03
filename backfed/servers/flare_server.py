@@ -1,8 +1,5 @@
-"""
-Implementation of FLARE server for federated learning.
-"""
+"""Implementation of FLARE server for federated learning."""
 
-import copy
 import torch
 import numpy as np
 from typing import Dict, List, Tuple
@@ -10,6 +7,7 @@ from logging import INFO
 
 from backfed.servers.defense_categories import RobustAggregationServer
 from backfed.utils.logging_utils import log
+
 
 class FlareServer(RobustAggregationServer):
     """
@@ -23,40 +21,28 @@ class FlareServer(RobustAggregationServer):
     def __init__(self, server_config, voting_threshold: float = 0.5):
         super().__init__(server_config)
         self.voting_threshold = voting_threshold
-        self.central_dataset = None
         log(INFO, f"Initialized FLARE server with voting_threshold={voting_threshold}")
 
     def _kernel_function(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        """Compute RBF kernel between two vectors."""
+        """Compute RBF kernel matrix between two sets of vectors."""
         sigma = 1.0
-        return torch.exp(-torch.linalg.norm(x - y) ** 2 / (2 * sigma ** 2))
+        return torch.exp(-torch.cdist(x, y, p=2).pow(2) / (2 * sigma ** 2))
 
     def _compute_mmd(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         """Compute Maximum Mean Discrepancy between two sets of features."""
         m, n = x.size(0), y.size(0)
 
-        # Compute kernel matrices
-        xx_kernel = torch.zeros((m, m))
-        yy_kernel = torch.zeros((n, n))
-        xy_kernel = torch.zeros((m, n))
+        # Compute kernel matrices on the correct device
+        xx_kernel = self._kernel_function(x, x)
+        yy_kernel = self._kernel_function(y, y)
+        xy_kernel = self._kernel_function(x, y)
 
-        for i in range(m):
-            for j in range(i, m):
-                xx_kernel[i, j] = xx_kernel[j, i] = self._kernel_function(x[i], x[j])
+        # Remove diagonal terms for unbiased MMD estimate
+        xx_sum = (xx_kernel.sum() - torch.diagonal(xx_kernel).sum()) / (m * (m - 1))
+        yy_sum = (yy_kernel.sum() - torch.diagonal(yy_kernel).sum()) / (n * (n - 1))
+        xy_sum = xy_kernel.sum() / (m * n)
 
-        for i in range(n):
-            for j in range(i, n):
-                yy_kernel[i, j] = yy_kernel[j, i] = self._kernel_function(y[i], y[j])
-
-        for i in range(m):
-            for j in range(n):
-                xy_kernel[i, j] = self._kernel_function(x[i], y[j])
-
-        # Calculate MMD statistic
-        mmd = (xx_kernel.sum() / (m * (m - 1))) + \
-              (yy_kernel.sum() / (n * (n - 1))) - \
-              (2 * xy_kernel.sum() / (m * n))
-
+        mmd = xx_sum + yy_sum - 2 * xy_sum
         return mmd
 
     def aggregate_client_updates(self, client_updates: List[Tuple[int, int, Dict]],
@@ -91,11 +77,11 @@ class FlareServer(RobustAggregationServer):
 
         # Voting mechanism
         vote_counter = [0] * num_clients
-        k = round(num_clients * self.voting_threshold)
+        k = max(1, round(num_clients * self.voting_threshold))
 
         for i in range(num_clients):
             sorted_indices = np.argsort(distance_list[i])
-            for j in range(k):
+            for j in range(min(k, len(sorted_indices))):
                 client_id = sorted_indices[j] + 1 if sorted_indices[j] >= i else sorted_indices[j]
                 vote_counter[client_id] += 1
 
