@@ -117,6 +117,9 @@ class FlameServer(AnomalyDetectionServer, RobustAggregationServer):
             for name, param in update.items():
                 if name.endswith('num_batches_tracked'):
                     continue
+                if 'tied' in name and 'decoder.weight' in name or '__' in name:
+                    continue
+                
                 diff = (param.to(self.device) - self.global_model_params[name])
                 if ('weight' in name or 'bias' in name) and euclidean_distances[idx] > clip_norm:
                     diff *= clip_norm / euclidean_distances[idx]

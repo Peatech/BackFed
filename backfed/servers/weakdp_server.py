@@ -51,6 +51,11 @@ class NormClippingServer(RobustAggregationServer):
             if weight_diff_norm > self.clipping_norm:
                 scaling_factor = self.clipping_norm / weight_diff_norm
                 for name, param in client_diff.items():
+                    if name.endswith('num_batches_tracked'):
+                        continue
+                    if 'tied' in name and 'decoder.weight' in name or '__' in name:
+                        continue
+                    
                     if 'weight' in name or 'bias' in name:
                         client_diff[name].mul_(scaling_factor)
 

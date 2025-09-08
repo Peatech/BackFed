@@ -373,6 +373,10 @@ class MaliciousClient(BaseClient):
         """
         model_params = {}
         for name, param in self.model.state_dict().items():
+            #### don't scale tied weights:
+            if 'tied' in name and 'decoder.weight' in name or '__' in name:
+                continue
+
             global_param = global_params[name].to(self.device)
             local_param = param.to(self.device)
             model_params[name] = (global_param + scale_factor * (local_param - global_param)).cpu()
