@@ -102,40 +102,80 @@ class FL_DataLoader:
             dataset_name (str): Name of the dataset to load.
         """
         datapath = os.path.join(self.config["datapath"], dataset_name)
+        
+        # Handle Kaggle/Colab environments where input path is read-only
+        download_path = datapath
+        if os.path.exists("/kaggle") or os.getenv("COLAB_GPU"):  # Kaggle or Colab environment
+            # Try to use existing dataset in input path first
+            if not os.path.exists(datapath):
+                # If not in input, use working directory for downloads
+                if os.path.exists("/kaggle"):
+                    download_path = f"/kaggle/working/data/{dataset_name}"
+                else:  # Colab
+                    download_path = f"/content/data/{dataset_name}"
+                os.makedirs(download_path, exist_ok=True)
+                log(INFO, f"Dataset not found at {datapath}, downloading to {download_path}")
+            else:
+                log(INFO, f"Using existing dataset at {datapath}")
+        
+        # Use the appropriate path (either existing input path or writable download path)
+        final_path = datapath if os.path.exists(datapath) else download_path
 
         if dataset_name == "CIFAR10":
-            self.trainset = datasets.CIFAR10(datapath, train=True, download=True,
+            self.trainset = datasets.CIFAR10(final_path, train=True, download=True,
                                              transform=self.train_transform)
-            self.testset = datasets.CIFAR10(datapath, train=False, download=True,
+            self.testset = datasets.CIFAR10(final_path, train=False, download=True,
                                             transform=self.test_transform)
 
         elif dataset_name == "CIFAR100":
-            self.trainset = datasets.CIFAR100(datapath, train=True, download=True,
+            self.trainset = datasets.CIFAR100(final_path, train=True, download=True,
                                               transform=self.train_transform)
-            self.testset = datasets.CIFAR100(datapath, train=False, download=True,
+            self.testset = datasets.CIFAR100(final_path, train=False, download=True,
                                              transform=self.test_transform)
 
         elif dataset_name == "MNIST":
-            self.trainset = datasets.MNIST(datapath, train=True, download=True,
-                                           transform=self.train_transform)
-            self.testset = datasets.MNIST(datapath, train=False, download=True,
-                                          transform=self.test_transform)
+            self.trainset = datasets.MNIST(final_path, train=True, download=True,
+                                          transform=self.train_transform)
+            self.testset = datasets.MNIST(final_path, train=False, download=True,
+                                         transform=self.test_transform)
 
         elif "EMNIST" in dataset_name:
             split = dataset_name.split("_")[-1].lower()
-            datapath = os.path.join(self.config["datapath"], "EMNIST")
-            self.trainset = datasets.EMNIST(datapath, train=True, split=split, download=True,
+            emnist_datapath = os.path.join(self.config["datapath"], "EMNIST")
+            # Apply same Kaggle/Colab logic for EMNIST
+            emnist_download_path = emnist_datapath
+            if os.path.exists("/kaggle") or os.getenv("COLAB_GPU"):
+                if not os.path.exists(emnist_datapath):
+                    if os.path.exists("/kaggle"):
+                        emnist_download_path = "/kaggle/working/data/EMNIST"
+                    else:
+                        emnist_download_path = "/content/data/EMNIST"
+                    os.makedirs(emnist_download_path, exist_ok=True)
+            emnist_final_path = emnist_datapath if os.path.exists(emnist_datapath) else emnist_download_path
+            
+            self.trainset = datasets.EMNIST(emnist_final_path, train=True, split=split, download=True,
                                             transform=self.train_transform)
-            self.testset = datasets.EMNIST(datapath, train=False, split=split, download=True,
+            self.testset = datasets.EMNIST(emnist_final_path, train=False, split=split, download=True,
                                            transform=self.test_transform)
             if self.trainset.split == self.testset.split == "letters":
                 self.trainset.targets -= 1
                 self.testset.targets -= 1
 
         elif dataset_name == "TINYIMAGENET":
-            self.trainset = TinyImageNet(root=datapath, split="train",
+            # TinyImageNet doesn't auto-download, so use existing path logic
+            tiny_datapath = os.path.join(self.config["datapath"], "TINYIMAGENET")
+            tiny_final_path = tiny_datapath
+            if os.path.exists("/kaggle") or os.getenv("COLAB_GPU"):
+                if not os.path.exists(tiny_datapath):
+                    if os.path.exists("/kaggle"):
+                        tiny_final_path = "/kaggle/working/data/TINYIMAGENET"
+                    else:
+                        tiny_final_path = "/content/data/TINYIMAGENET"
+                    os.makedirs(tiny_final_path, exist_ok=True)
+            
+            self.trainset = TinyImageNet(root=tiny_final_path, split="train",
                                          transform=self.train_transform)
-            self.testset = TinyImageNet(root=datapath, split="val",
+            self.testset = TinyImageNet(root=tiny_final_path, split="val",
                                         transform=self.test_transform)
 
         elif dataset_name in ["SENTIMENT140", "REDDIT", "FEMNIST"]:

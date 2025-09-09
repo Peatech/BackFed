@@ -33,6 +33,7 @@ If you're new to federated learning or BackFed, start here:
 !pip install -q -r requirements.txt
 
 # Cell 3: Run your first federated learning experiment (clean, no attacks)
+# CIFAR10 will be automatically downloaded to /kaggle/working/data/
 !python kaggle_main.py no_attack=true num_rounds=10
 
 # Cell 4: Run with a simple attack
@@ -615,16 +616,27 @@ for name, module in model.named_modules():
   aggregator_config.fedavgcka.layer_comparison="layer4"  # Use valid layer name
 ```
 
-#### 4. "Dataset not found" Error
+#### 4. "Dataset not found" or "Read-only file system" Error
 
-**Solution A: Specify correct path**
+BackFed automatically handles dataset downloads in Kaggle/Colab environments. If you see a read-only file system error, this means:
+
+**For CIFAR10/MNIST (auto-download datasets):**
+- BackFed will automatically download to `/kaggle/working/data/` if not found in `/kaggle/input/`
+- No action needed - just re-run your command
+
+**For custom datasets:**
 ```bash
+# Option A: Upload as Kaggle dataset and specify path
 !python kaggle_main.py datapath="/kaggle/input/your-dataset-name"
+
+# Option B: Use working directory
+!python kaggle_main.py datapath="/kaggle/working/data"
 ```
 
-**Solution B: Use working directory**
+**Troubleshooting:**
+If downloads fail, you can manually specify the working directory:
 ```bash
-!python kaggle_main.py datapath="/kaggle/working/data"
+!python kaggle_main.py datapath="/kaggle/working" dataset=CIFAR10
 ```
 
 #### 5. "Checkpoint not found" Error
