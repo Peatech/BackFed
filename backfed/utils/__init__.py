@@ -13,6 +13,7 @@ from backfed.utils.system_utils import (
     system_startup,
     set_attack_config,
     set_random_seed,
+    set_seed,
     set_debug_settings,
     pool_size_from_resources
 )
@@ -55,7 +56,7 @@ __all__ = [
     # Model utilities
     'get_model', 'get_layer_names', 'get_normalization', 'get_last_layer_name',
     # System utilities
-    'system_startup', 'set_attack_config', 'set_random_seed', 'set_debug_settings', 'pool_size_from_resources',
+    'system_startup', 'set_attack_config', 'set_random_seed', 'set_seed', 'set_debug_settings', 'pool_size_from_resources',
     # Logging utilities
     'log', 'CSVLogger', 'get_console', 'init_wandb', 'init_csv_logger', 'plot_csv', 'save_model_to_wandb_artifact',
     # Server utilities

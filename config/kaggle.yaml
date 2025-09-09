@@ -1,0 +1,103 @@
+---
+# *Configuration optimized for Kaggle/Colab environments
+# *Inherits from base and provides conservative defaults for single-process execution
+
+defaults:
+  - base # Inherit from base config
+  - atk_config: cifar10_singleshot # Use single-shot attacks for faster execution
+  - _self_ # This ensures your config overrides the base config
+
+# *Single-process mode - no Ray orchestration
+training_mode: sequential
+
+# *Conservative resource settings for Kaggle/Colab (single GPU/CPU only)
+cuda_visible_devices: "0"
+num_cpus: 1
+num_gpus: 1.0  # Use full GPU if available
+
+# *Conservative FL settings to run quickly in limited environments
+num_rounds: 50  # Reduced from default 600
+num_clients: 20  # Reduced from default 100
+num_clients_per_round: 5  # Reduced from default 10
+
+# *Dataset configuration
+dataset: CIFAR10
+datapath: /kaggle/input/cifar10  # Default Kaggle dataset path
+model: ResNet18
+num_classes: 10
+
+# *Conservative training settings
+client_config:
+  local_epochs: 1  # Reduced from default 2
+  batch_size: 32   # Reduced from default 64
+  optimizer: sgd
+  lr: 0.05  # Slightly reduced learning rate
+  weight_decay: 5e-4
+  momentum: 0.9
+  mixed_precision: True
+  timeout: 300  # 5 minute timeout per client
+
+# *Reduced test settings for faster execution
+test_batch_size: 256  # Reduced from default 2048
+num_workers: 0  # Disable multiprocessing for data loading
+pin_memory: false  # Disable to reduce memory usage
+test_every: 5  # Test less frequently
+
+# *Kaggle/Colab path configuration
+outputs_root: "/kaggle/working"  # Kaggle working directory
+checkpoints_dir: "/kaggle/working/checkpoints"
+csv_results_dir: "/kaggle/working/csv_results"
+
+# *Conservative logging - default to CSV only
+save_logging: csv
+disable_progress_bar: true  # Reduce notebook output clutter
+
+# *Deterministic training for reproducible results
+seed: 42
+deterministic: true
+
+# *Debug settings - use small fraction of data for quick testing
+debug: false
+debug_fraction_data: 0.2
+
+# *Disable model saving by default (limited space)
+save_model: false
+save_checkpoint: false
+
+# *Attack configuration overrides for single-shot execution
+atk_config:
+  # Use fewer adversaries for quicker execution
+  fraction_adversaries: 0.1  # 2 out of 20 clients
+  
+  # Single-shot poisoning
+  poison_frequency: "single-shot"
+  poison_start_round: 10
+  poison_end_round: 10
+  
+  # Conservative poison settings
+  poison_rate: 0.2  # Reduce poison rate
+  poison_epochs: 2  # Reduce poison epochs
+  poisoned_lr: 0.01  # Lower learning rate for stability
+  
+  # Simple target
+  attack_type: "all2one"
+  target_class: 0
+  random_class: false
+
+# *Visualization disabled for cleaner notebook output
+plot_data_distribution: false
+plot_client_selection: false
+
+# *Override aggregator settings for stability
+aggregator: unweighted_fedavg
+aggregator_config:
+  unweighted_fedavg:
+    _target_: backfed.servers.UnweightedFedAvgServer
+    eta: 0.5  # Lower server learning rate for stability
+
+# *Hydra configuration for Kaggle/Colab
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: /kaggle/working/outputs/${dir_tag}/${now:%Y-%m-%d-%H-%M-%S}

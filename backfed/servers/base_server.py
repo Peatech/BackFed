@@ -2,7 +2,6 @@
 Base server implementation.
 """
 import torch
-import ray
 import wandb
 import os
 import glob
@@ -12,9 +11,18 @@ import copy
 from hydra.utils import get_class
 from torch.utils.data import DataLoader
 from logging import ERROR
-from ray.actor import ActorHandle
 from rich.progress import track
 from hydra.utils import instantiate
+
+# Ray import is conditional
+try:
+    import ray
+    from ray.actor import ActorHandle
+    RAY_AVAILABLE = True
+except ImportError:
+    ray = None
+    ActorHandle = None
+    RAY_AVAILABLE = False
 from backfed.client_manager import ClientManager
 from backfed.clients import RedditMaliciousClient, SentimentMaliciousClient
 from backfed.datasets import FL_DataLoader, nonIID_Dataset, check_download
@@ -35,7 +43,7 @@ from backfed.clients import ClientApp, BenignClient, MaliciousClient
 from backfed.poisons import Poison, IBA, A3FL
 from backfed.const import StateDict, Metrics, client_id, num_examples
 from logging import INFO, WARNING
-from typing import Dict, Any, List, Tuple, Callable, Optional
+from typing import Dict, Any, List, Tuple, Callable, Optional, Union
 from collections import deque
 
 class BaseServer:
@@ -148,6 +156,9 @@ class BaseServer:
 
     def _init_trainer(self):
         if self.config.training_mode == "parallel":
+            if not RAY_AVAILABLE:
+                raise RuntimeError("Ray is not available but parallel training mode is requested")
+            
             model_ref = ray.put(self.global_model)
             client_config_ref = ray.put(self.config.client_config)
             dataset_ref = ray.put(self.trainset)
@@ -363,6 +374,8 @@ class BaseServer:
             and round_number in self.client_manager.get_poison_rounds():
             try:
                 # Try to get the latest resources for this round
+                if not RAY_AVAILABLE:
+                    raise RuntimeError("Ray is not available")
                 resource_package = ray.get(self.context_actor.wait_for_resource.remote(round_number=round_number))
 
                 # Update the poison module based on its type
@@ -743,6 +756,9 @@ class FLTrainer:
         if self.mode == "sequential":
             self.workers : List[ClientApp] = [ClientApp(**clientapp_init_args) for _ in range(self.server.config.num_clients)]
         elif self.mode == "parallel":
+            if not RAY_AVAILABLE:
+                raise RuntimeError("Ray is not available but parallel training mode is requested")
+                
             ray_client = ray.remote(ClientApp).options(
                 num_cpus=self.server.config.num_cpus,
                 num_gpus=self.server.config.num_gpus
@@ -750,7 +766,7 @@ class FLTrainer:
 
             client_ressource = dict(num_cpus=self.server.config.num_cpus, num_gpus=self.server.config.num_gpus)
             self.num_workers = pool_size_from_resources(client_ressource)
-            self.workers : List[ActorHandle] = [
+            self.workers : List[Union[ActorHandle, Any]] = [
                 ray_client.remote(**clientapp_init_args) for _ in range(self.num_workers)
             ]
         else:
@@ -816,8 +832,8 @@ class FLTrainer:
         for client_cls, clients in clients_mapping.items():
             init_args, train_package = self.server.train_package(client_cls)
 
-            init_args_ref = ray.put(init_args)
-            train_package_ref = ray.put(train_package)
+            init_args_ref = ray.put(init_args) if RAY_AVAILABLE else init_args
+            train_package_ref = ray.put(train_package) if RAY_AVAILABLE else train_package
             for client_id in clients:
                 all_clients.append((client_cls, client_id, init_args_ref, train_package_ref))
 
@@ -844,9 +860,13 @@ class FLTrainer:
 
             # Process completed tasks
             if len(futures) > 0:
+                if not RAY_AVAILABLE:
+                    raise RuntimeError("Ray is not available but parallel training mode is requested")
                 all_finished, futures = ray.wait(futures)
                 for finished in all_finished:
                     client_id, worker_id = job_map[finished]
+                    if not RAY_AVAILABLE:
+                        raise RuntimeError("Ray is not available")
                     client_package = ray.get(finished)
                     idle_workers.append(worker_id)
 
@@ -911,7 +931,7 @@ class FLTrainer:
         all_clients = []
         for client_cls, clients in clients_mapping.items():
             test_package = self.server.test_package(client_cls)
-            test_package_ref = ray.put(test_package)
+            test_package_ref = ray.put(test_package) if RAY_AVAILABLE else test_package
             for client_id in clients:
                 all_clients.append((client_id, test_package_ref))
 
@@ -933,9 +953,13 @@ class FLTrainer:
 
             # Process completed tasks
             if len(futures) > 0:
+                if not RAY_AVAILABLE:
+                    raise RuntimeError("Ray is not available but parallel training mode is requested")
                 all_finished, futures = ray.wait(futures)
                 for finished in all_finished:
                     client_id, worker_id = job_map[finished]
+                    if not RAY_AVAILABLE:
+                        raise RuntimeError("Ray is not available")
                     client_package = ray.get(finished)
                     idle_workers.append(worker_id)
 
@@ -1047,6 +1071,8 @@ class FLTrainer:
 
             # Process completed tasks
             if len(futures) > 0:
+                if not RAY_AVAILABLE:
+                    raise RuntimeError("Ray is not available but parallel training mode is requested")
                 all_finished, futures = ray.wait(futures)
                 for finished in all_finished:
                     client_id, worker_id = job_map[finished]

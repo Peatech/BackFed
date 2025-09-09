@@ -7,7 +7,6 @@ import random
 import socket
 import numpy as np
 import torch
-import ray
 
 from typing import Dict, Union
 from datetime import datetime
@@ -15,6 +14,14 @@ from omegaconf import DictConfig
 from logging import INFO, WARNING
 from backfed.const import NUM_CLASSES
 from backfed.utils.logging_utils import log
+
+# Ray import is conditional
+try:
+    import ray
+    RAY_AVAILABLE = True
+except ImportError:
+    ray = None
+    RAY_AVAILABLE = False
 
 def system_startup(config: DictConfig):
     # Set CUDA devices
@@ -34,6 +41,9 @@ def system_startup(config: DictConfig):
 
     # Initialize Ray for parallel mode
     if config.training_mode == "parallel":
+        if not RAY_AVAILABLE:
+            log(ERROR, "Ray is not available but parallel training mode is requested. Please install Ray or use sequential mode.")
+            raise ImportError("Ray is required for parallel training mode")
         namespace = f"{config.dataset}_{config.aggregator}"
         ray_init(num_gpus=total_gpus, num_cpus=total_cpus, namespace=namespace)
 
@@ -69,6 +79,10 @@ def system_startup(config: DictConfig):
         set_attack_config(config)
 
 def ray_init(num_gpus: int, num_cpus: int, namespace: str):
+    """Initialize Ray cluster. Only called when Ray is available and parallel mode is requested."""
+    if not RAY_AVAILABLE:
+        raise RuntimeError("Ray is not available")
+    
     # Calculate a reasonable object store memory limit (50% of system memory or 8GB, whichever is smaller)
     try:
         ray.init(
@@ -135,6 +149,19 @@ def set_random_seed(seed=123123, deterministic=False):
     if deterministic:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
+        # Additional deterministic settings for Kaggle/Colab
+        torch.use_deterministic_algorithms(True, warn_only=True)
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
+def set_seed(seed: int, deterministic: bool = False):
+    """
+    Unified seed setting utility for both server and client training.
+    
+    Args:
+        seed: Random seed value
+        deterministic: Enable deterministic training (slower but fully reproducible)
+    """
+    set_random_seed(seed, deterministic)
 
 def set_debug_settings(config):
     """Set config for debug settings"""
@@ -171,6 +198,9 @@ def set_debug_settings(config):
 
 def pool_size_from_resources(client_resources: Dict[str, Union[int, float]]) -> int:
     """Calculate maximum number of actors that can fit in the cluster based on resources."""
+    if not RAY_AVAILABLE:
+        raise RuntimeError("Ray is not available")
+        
     total_actors = 0
     client_cpus = client_resources["num_cpus"]
     client_gpus = client_resources.get("num_gpus", 0.0)
