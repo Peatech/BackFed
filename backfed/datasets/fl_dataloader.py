@@ -185,6 +185,7 @@ class FL_DataLoader:
         # Initialize trainset and testset
         self.load_dataset(dataset_name=self.config["dataset"].upper())
         
+        cache_file_path = None
         if not self.config.debug:
             distribution_keys = ["partitioner"] if self.config.partitioner == "uniform" else ["partitioner", "alpha"]
             keys = ["dataset", *distribution_keys, "num_clients", "seed"]
@@ -197,7 +198,7 @@ class FL_DataLoader:
             cache_file_path = os.path.join("data_splits", f"{hash_value}.pkl")
 
         # Try to load from cache if it exists
-        if os.path.exists(cache_file_path):
+        if cache_file_path and os.path.exists(cache_file_path):
             try:
                 with open(cache_file_path, 'rb') as f:
                     self.client_data_indices = pickle.load(f)

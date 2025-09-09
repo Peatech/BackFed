@@ -37,7 +37,11 @@ def system_startup(config: DictConfig):
     total_gpus = torch.cuda.device_count()
     client_cpus = config.num_cpus
     client_gpus = config.num_gpus
-    num_parallel = min(int(total_cpus / client_cpus), int(total_gpus / client_gpus))
+    # Calculate number of parallel workers, avoid division by zero
+    if client_gpus > 0 and total_gpus > 0:
+        num_parallel = min(int(total_cpus / client_cpus), int(total_gpus / client_gpus))
+    else:
+        num_parallel = int(total_cpus / client_cpus)
 
     # Initialize Ray for parallel mode
     if config.training_mode == "parallel":

@@ -208,6 +208,19 @@ aggregator_config:
   indicator:
     _target_: backfed.servers.IndicatorServer
 
+  fedavgcka:
+    _target_: backfed.servers.FedAvgCKAServer
+    eta: 0.1
+    trim_fraction: 0.3
+    layer_comparison: "penultimate"  # Options: "penultimate", "layer2", "layer3", "multi_layer"
+    root_dataset_size: 64
+    root_sampling_strategy: "class_balanced"  # Options: "random", "class_balanced"
+    log_scores: false
+    multi_layer_weights:  # Weights for multi-layer comparison (only used if layer_comparison="multi_layer")
+      avgpool: 0.4
+      layer3: 0.35
+      layer2: 0.25
+
 ########################################################
 # *Optimizer configuration
 client_optimizer_config:

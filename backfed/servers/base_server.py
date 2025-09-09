@@ -617,7 +617,9 @@ class BaseServer:
             }
         elif issubclass(client_type, MaliciousClient):
             assert self.poison_module is not None, "Poison module is not initialized"
-            assert self.context_actor is not None, "Context actor is not initialized"
+            # Context actor is only required in parallel mode
+            if self.config.training_mode == "parallel":
+                assert self.context_actor is not None, "Context actor is not initialized"
 
             model_poison_method = self.atk_config.model_poison_method
             model_poison_kwargs = {k:v for k,v in self.atk_config.model_poison_config[model_poison_method].items() if k != "_target_"}

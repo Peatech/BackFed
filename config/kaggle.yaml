@@ -94,6 +94,20 @@ aggregator_config:
   unweighted_fedavg:
     _target_: backfed.servers.UnweightedFedAvgServer
     eta: 0.5  # Lower server learning rate for stability
+    
+  # FedAvgCKA defense with conservative settings for Kaggle/Colab
+  fedavgcka:
+    _target_: backfed.servers.FedAvgCKAServer
+    eta: 0.5
+    trim_fraction: 0.2  # More conservative filtering
+    layer_comparison: "penultimate"  # Single layer for faster computation
+    root_dataset_size: 32  # Smaller dataset for memory efficiency  
+    root_sampling_strategy: "class_balanced"
+    log_scores: true  # Enable logging for debugging
+    multi_layer_weights:
+      avgpool: 0.4
+      layer3: 0.35
+      layer2: 0.25
 
 # *Hydra configuration for Kaggle/Colab
 hydra:
