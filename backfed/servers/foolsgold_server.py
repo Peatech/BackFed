@@ -39,9 +39,10 @@ class FoolsGoldServer(RobustAggregationServer):
         for client_id, _, client_params in client_updates:
             # Convert model updates to flat vector
             update_vector = []
+            global_state_dict = self.global_model.state_dict()
             for name, param in client_params.items():
-                if "bias" in name or "weight" in name:
-                    diff = param.to(self.device) - self.global_model_params[name]
+                if name in global_state_dict:
+                    diff = param.to(self.device) - global_state_dict[name]
                     update_vector.append(diff.flatten())
 
             update_vector = torch.cat(update_vector)
@@ -63,20 +64,21 @@ class FoolsGoldServer(RobustAggregationServer):
 
         weight_accumulator = {
             name: torch.zeros_like(param, device=self.device)
-            for name, param in self.global_model_params.items()
+            for name, param in self.global_model.parameters().items()
         }
 
+        global_state_dict = self.global_model.state_dict()
         for weight, (cid, num_samples, client_state) in zip(foolsgold_weights, client_updates):
             for name, param in client_state.items():
-                if name.endswith('num_batches_tracked'):
-                    continue
-                diff = param.to(self.device) - self.global_model_params[name]
-                weight_accumulator[name].add_(diff * weight)
+                if name in global_state_dict:
+                    diff = param.to(self.device) - global_state_dict[name]
+                    weight_accumulator[name].add_(diff * weight)
 
         # Update global model with learning rate
-        for name, param in self.global_model_params.items():
-            if "bias" in name or "weight" in name:
-                param.add_(weight_accumulator[name])
+        for name, param in self.global_model.state_dict().items():
+            if any(pattern in name for pattern in self.ignore_weights):
+                continue
+            param.data.add_(weight_accumulator[name])
 
         return True
 

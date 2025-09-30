@@ -6,7 +6,7 @@ python main.py -cn cifar10\
     atk_config.selection_scheme=all-adversary \
     atk_config.adversary_selection=fixed \
     atk_config.poison_frequency=multi-shot \
-    atk_config.mutual_dataset=True \
+    atk_config.secret_dataset=True \
     atk_config.num_attacker_samples=1600 \
     atk_config.poison_start_round=2001 \
     atk_config.poison_end_round=2200 \
@@ -26,7 +26,7 @@ python main.py -cn cifar10\
     atk_config.selection_scheme=all-adversary \
     atk_config.adversary_selection=fixed \
     atk_config.poison_frequency=multi-shot \
-    atk_config.mutual_dataset=True \
+    atk_config.secret_dataset=True \
     atk_config.num_attacker_samples=1600 \
     atk_config.poison_start_round=2001 \
     atk_config.poison_end_round=2200 \
@@ -46,7 +46,7 @@ python main.py -cn cifar10\
     atk_config.selection_scheme=all-adversary \
     atk_config.adversary_selection=fixed \
     atk_config.poison_frequency=multi-shot \
-    atk_config.mutual_dataset=True \
+    atk_config.secret_dataset=True \
     atk_config.num_attacker_samples=1600 \
     atk_config.poison_start_round=2001 \
     atk_config.poison_end_round=2200 \

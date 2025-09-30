@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from .simple import SimpleNet
 
 def double_conv(in_channels, out_channels):
     return nn.Sequential(
@@ -12,9 +11,9 @@ def double_conv(in_channels, out_channels):
         nn.ReLU(inplace=True)
     )
 
-class UNet(SimpleNet):
+class UNet(nn.Module):
     def __init__(self, out_channel):
-        super().__init__()
+        super(UNet, self).__init__()
 
         self.dconv_down1 = double_conv(3, 64)
         self.dconv_down2 = double_conv(64, 128)

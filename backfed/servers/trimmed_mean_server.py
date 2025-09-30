@@ -50,10 +50,10 @@ class TrimmedMeanServer(RobustAggregationServer):
         num_trim = int(num_clients * self.trim_ratio)
 
         # Update global model parameters directly
-        for name, param in self.global_model_params.items():
-            if name.endswith('num_batches_tracked'):
+        for name, param in self.global_model.state_dict():
+            if any(pattern in name for pattern in self.ignore_weights):
                 continue
-
+                
             # Stack parameters from all clients for this layer
             layer_updates = torch.stack([client_param[name] for client_param in client_params])
 
@@ -65,7 +65,7 @@ class TrimmedMeanServer(RobustAggregationServer):
             mean_update = torch.mean(trimmed_updates, dim=0)
 
             # Apply update
-            param.copy_(mean_update.to(param.device))
+            param.data.copy_(mean_update.to(param.device))
 
         return True
 

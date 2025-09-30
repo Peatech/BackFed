@@ -55,9 +55,6 @@ class LocalDPClient(BenignClient):
         std_dev = train_package["std_dev"]
         clipping_norm = train_package["clipping_norm"]
                         
-        # Initialize training tools
-        scaler = torch.amp.GradScaler(device=self.device)
-
         # Training loop
         self.model.train()
         for internal_epoch in range(self.client_config.local_epochs):
@@ -80,19 +77,17 @@ class LocalDPClient(BenignClient):
                     images = normalization(images)
 
                 # Forward pass and loss computation
-                with torch.amp.autocast("cuda"):
-                    outputs = self.model(images)
-                    loss = self.criterion(outputs, labels)
+                outputs = self.model(images)
+                loss = self.criterion(outputs, labels)
 
                 # Backward pass
-                scaler.scale(loss).backward()
+                loss.backward()
                 
                 # Apply differential privacy to gradients before optimizer step
                 self._apply_dp_to_gradients(clipping_norm, std_dev)
 
                 # Optimizer step with privatized gradients
-                scaler.step(self.optimizer)
-                scaler.update()
+                self.optimizer.step()
 
                 running_loss += loss.item() * len(labels)
                 epoch_correct += (outputs.argmax(dim=1) == labels).sum().item()

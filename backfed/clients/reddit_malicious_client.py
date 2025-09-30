@@ -78,9 +78,6 @@ class RedditMaliciousClient(MaliciousClient):
         
         # Setup training protocol
         proximal_mu = train_package.get('proximal_mu', None) if self.atk_config.follow_protocol else None
-
-        # Initialize training tools
-        scaler = torch.amp.GradScaler(device=self.device)
         
         if self.atk_config.poisoned_is_projection or proximal_mu is not None:
             global_params_tensor = torch.cat([param.view(-1).detach().clone().requires_grad_(False) for name, param in train_package["global_model_params"].items()
@@ -140,59 +137,56 @@ class RedditMaliciousClient(MaliciousClient):
                 self.optimizer.zero_grad()
                 
                 # Forward pass and loss computation
-                with torch.amp.autocast("cuda"):
-                    if self.atk_config.poison_mode == "multi_task":
-                        # Handle multi-task poisoning
-                        clean_inputs = inputs.detach().clone()
-                        clean_targets = targets.detach().clone()
-                        
-                        # Use poison_batch instead of separate poison_inputs/poison_labels methods
-                        poisoned_inputs, poisoned_targets = self.poison_module.poison_batch(batch=(inputs, targets), mode="train")
-
-                        # Compute losses for both clean and poisoned data
-                        clean_output, clean_hidden = self.model(clean_inputs, hidden)
-                        poisoned_output, poisoned_hidden = self.model(poisoned_inputs, hidden)
-
-                        # Use the last output for loss calculation
-                        clean_loss = self.criterion(clean_output[:, -1, :], clean_targets[:, -1])
-                        poisoned_loss = self.criterion(poisoned_output[:, -1, :], poisoned_targets[:, -1])
-
-                        # Combine losses according to attack alpha
-                        loss = (self.atk_config.attack_alpha * poisoned_loss +
-                               (1 - self.atk_config.attack_alpha) * clean_loss)
-                        
-                        # Update hidden state for next batch
-                        hidden = clean_hidden
-
-                    elif self.atk_config.poison_mode in ["online", "offline"]:
-                        if self.atk_config.poison_mode == "online":
-                            inputs, targets = self.poison_module.poison_batch(batch=(inputs, targets))
-
-                        # Forward pass and loss computation
-                        outputs, hidden = self.model(inputs, hidden)
-                        loss = self.criterion(outputs[:, -1, :], targets[:, -1])
-
-                    else:
-                        raise ValueError(
-                            f"Invalid poison_mode: {self.atk_config.poison_mode}. "
-                            f"Expected one of: ['multi_task', 'online', 'offline']"
-                        )
-
-                    # Add proximal term if needed
-                    if proximal_mu is not None:
-                        proximal_term = self.model_dist(global_params_tensor=global_params_tensor, gradient_calc=True)
-                        loss += (proximal_mu / 2) * proximal_term
+                if self.atk_config.poison_mode == "multi_task":
+                    # Handle multi-task poisoning
+                    clean_inputs = inputs.detach().clone()
+                    clean_targets = targets.detach().clone()
                     
-                # Backward pass with gradient masking
-                scaler.scale(loss).backward()
+                    # Use poison_batch instead of separate poison_inputs/poison_labels methods
+                    poisoned_inputs, poisoned_targets = self.poison_module.poison_batch(batch=(inputs, targets), mode="train")
+
+                    # Compute losses for both clean and poisoned data
+                    clean_output, clean_hidden = self.model(clean_inputs, hidden)
+                    poisoned_output, poisoned_hidden = self.model(poisoned_inputs, hidden)
+
+                    # Use the last output for loss calculation
+                    clean_loss = self.criterion(clean_output[:, -1, :], clean_targets[:, -1])
+                    poisoned_loss = self.criterion(poisoned_output[:, -1, :], poisoned_targets[:, -1])
+
+                    # Combine losses according to attack alpha
+                    loss = (self.atk_config.attack_alpha * poisoned_loss +
+                           (1 - self.atk_config.attack_alpha) * clean_loss)
+                    
+                    # Update hidden state for next batch
+                    hidden = clean_hidden
+
+                elif self.atk_config.poison_mode in ["online", "offline"]:
+                    if self.atk_config.poison_mode == "online":
+                        inputs, targets = self.poison_module.poison_batch(batch=(inputs, targets))
+
+                    # Forward pass and loss computation
+                    outputs, hidden = self.model(inputs, hidden)
+                    loss = self.criterion(outputs[:, -1, :], targets[:, -1])
+
+                else:
+                    raise ValueError(
+                        f"Invalid poison_mode: {self.atk_config.poison_mode}. "
+                        f"Expected one of: ['multi_task', 'online', 'offline']"
+                    )
+
+                # Add proximal term if needed
+                if proximal_mu is not None:
+                    proximal_term = self.model_dist(global_params_tensor=global_params_tensor, gradient_calc=True)
+                    loss += (proximal_mu / 2) * proximal_term
+                    
+                # Backward pass
+                loss.backward()
                 
-                # Clip gradients after scaling
-                scaler.unscale_(self.optimizer)
+                # Clip gradients
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.25)
 
                 # Optimizer step
-                scaler.step(self.optimizer)
-                scaler.update()
+                self.optimizer.step()
                 
                 # Accumulate loss
                 running_loss += loss.item() * targets.numel()

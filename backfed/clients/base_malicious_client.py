@@ -186,7 +186,6 @@ class MaliciousClient(BaseClient):
         proximal_mu = train_package.get('proximal_mu', None) if self.atk_config.follow_protocol else None
 
         # Initialize training tools
-        scaler = torch.amp.GradScaler(device=self.device)
 
         if self.atk_config.poisoned_is_projection or proximal_mu is not None:
             global_params_tensor = torch.cat([param.view(-1).detach().clone().requires_grad_(False) for name, param in train_package["global_model_params"].items()
@@ -226,59 +225,57 @@ class MaliciousClient(BaseClient):
                 labels = labels.to(self.device)
 
                 # Forward pass and loss computation
-                with torch.amp.autocast("cuda"):
-                    if self.atk_config.poison_mode == "multi_task":
-                        # Handle multi-task poisoning
-                        clean_images = images.detach().clone()
-                        clean_labels = labels.detach().clone()
-                        poisoned_images = self.poison_module.poison_inputs(images)
-                        poisoned_labels = self.poison_module.poison_labels(labels)
+                if self.atk_config.poison_mode == "multi_task":
+                    # Handle multi-task poisoning
+                    clean_images = images.detach().clone()
+                    clean_labels = labels.detach().clone()
+                    poisoned_images = self.poison_module.poison_inputs(images)
+                    poisoned_labels = self.poison_module.poison_labels(labels)
 
-                        # Apply normalization if provided
-                        if normalization:
-                            clean_images = normalization(clean_images)
-                            poisoned_images = normalization(poisoned_images)
+                    # Apply normalization if provided
+                    if normalization:
+                        clean_images = normalization(clean_images)
+                        poisoned_images = normalization(poisoned_images)
 
-                        # Compute losses for both clean and poisoned data in a single forward pass
-                        clean_output = self.model(clean_images)
-                        poisoned_output = self.model(poisoned_images)
+                    # Compute losses for both clean and poisoned data in a single forward pass
+                    clean_output = self.model(clean_images)
+                    poisoned_output = self.model(poisoned_images)
 
-                        clean_loss = self.criterion(clean_output, clean_labels)
-                        poisoned_loss = self.criterion(poisoned_output, poisoned_labels)
+                    clean_loss = self.criterion(clean_output, clean_labels)
+                    poisoned_loss = self.criterion(poisoned_output, poisoned_labels)
 
-                        # Combine losses according to attack alpha
-                        loss = (self.atk_config.attack_alpha * poisoned_loss +
-                               (1 - self.atk_config.attack_alpha) * clean_loss)
+                    # Combine losses according to attack alpha
+                    loss = (self.atk_config.attack_alpha * poisoned_loss +
+                           (1 - self.atk_config.attack_alpha) * clean_loss)
 
-                    elif self.atk_config.poison_mode in ["online", "offline"]:
-                        if self.atk_config.poison_mode == "online":
-                            images, labels = self.poison_module.poison_batch(batch=(images, labels))
+                elif self.atk_config.poison_mode in ["online", "offline"]:
+                    if self.atk_config.poison_mode == "online":
+                        images, labels = self.poison_module.poison_batch(batch=(images, labels))
 
-                        # Normalize images if needed
-                        if normalization:
-                            images = normalization(images)
+                    # Normalize images if needed
+                    if normalization:
+                        images = normalization(images)
 
-                        # Forward pass and loss computation
-                        outputs = self.model(images)
-                        loss = self.criterion(outputs, labels)
+                    # Forward pass and loss computation
+                    outputs = self.model(images)
+                    loss = self.criterion(outputs, labels)
 
-                    else:
-                        raise ValueError(
-                            f"Invalid poison_mode: {self.atk_config.poison_mode}. "
-                            f"Expected one of: ['multi_task', 'online', 'offline']"
-                        )
+                else:
+                    raise ValueError(
+                        f"Invalid poison_mode: {self.atk_config.poison_mode}. "
+                        f"Expected one of: ['multi_task', 'online', 'offline']"
+                    )
 
-                    # Add proximal term if needed
-                    if proximal_mu is not None:
-                        proximal_term = self.model_dist(global_params_tensor=global_params_tensor, gradient_calc=True)
-                        loss += (proximal_mu / 2) * proximal_term
+                # Add proximal term if needed
+                if proximal_mu is not None:
+                    proximal_term = self.model_dist(global_params_tensor=global_params_tensor, gradient_calc=True)
+                    loss += (proximal_mu / 2) * proximal_term
 
-                # Backward pass with gradient masking
-                scaler.scale(loss).backward()
+                # Backward pass
+                loss.backward()
 
                 # Optimizer step
-                scaler.step(self.optimizer)
-                scaler.update()
+                self.optimizer.step()
 
                 # Project poisoned model parameters
                 if self.atk_config.poisoned_is_projection and \

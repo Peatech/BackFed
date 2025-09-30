@@ -166,8 +166,6 @@ def set_debug_settings(config):
         config.atk_config.poison_start_round = round_num + 1
         config.atk_config.poison_end_round = round_num + 2
 
-    if config.atk_config.mutual_dataset == True:
-        config.atk_config.num_attacker_samples = 100
 
 def pool_size_from_resources(client_resources: Dict[str, Union[int, float]]) -> int:
     """Calculate maximum number of actors that can fit in the cluster based on resources."""

@@ -18,8 +18,8 @@ class FlareServer(RobustAggregationServer):
     with robust aggregation (weighted aggregation based on trust scores).
     """
 
-    def __init__(self, server_config, voting_threshold: float = 0.5):
-        super().__init__(server_config)
+    def __init__(self, server_config, server_type="flare", voting_threshold: float = 0.5, eta=0.1):
+        super().__init__(server_config, server_type, eta)
         self.voting_threshold = voting_threshold
         log(INFO, f"Initialized FLARE server with voting_threshold={voting_threshold}")
 
@@ -96,20 +96,21 @@ class FlareServer(RobustAggregationServer):
 
         weight_accumulator = {
             name: torch.zeros_like(param, device=self.device)
-            for name, param in self.global_model_params.items()
+            for name, param in self.global_model.state_dict().items()
         }
 
+        global_state_dict = self.global_model.state_dict()
         for weight, (cid, num_samples, client_state) in zip(trust_scores, client_updates):
             for name, param in client_state.items():
-                if name.endswith('num_batches_tracked'):
+                if any(pattern in name for pattern in self.ignore_weights):
                     continue
-                diff = param.to(self.device) - self.global_model_params[name]
+                diff = param.to(self.device) - global_state_dict[name]
                 weight_accumulator[name].add_(diff * weight)
 
         # Update global model with learning rate
-        for name, param in self.global_model_params.items():
-            if name.endswith('num_batches_tracked'):
+        for name, param in self.global_model.state_dict().items():
+            if any(pattern in name for pattern in self.ignore_weights):
                 continue
-            param.add_(weight_accumulator[name] * self.eta)
+            param.data.add_(weight_accumulator[name] * self.eta)
 
         return True

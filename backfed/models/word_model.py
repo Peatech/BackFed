@@ -7,17 +7,15 @@ import torch
 import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from torch.nn import TransformerEncoder, TransformerEncoderLayer, Parameter
 from transformers import AlbertModel
-from backfed.models.simple import SimpleNet
 
 extracted_grads = []
 def extract_grad_hook(module, grad_in, grad_out):
     extracted_grads.append(grad_out[0])
     
-class RNNLanguageModel(SimpleNet):
+class RNNLanguageModel(nn.Module):
     """Corrected RNN-based language model."""
 
     def __init__(self, rnn_type, ntoken, ninp, nhid, nlayers, dropout=0.5, tie_weights=False):
@@ -134,7 +132,7 @@ class RNNLanguageModel(SimpleNet):
             return torch.zeros(self.nlayers, batch_size, self.nhid, 
                               device=weight.device, dtype=weight.dtype)
 
-class RNNClassifier(SimpleNet):
+class RNNClassifier(nn.Module):
     """Container module with an encoder, LSTM, and classification head for sentiment analysis."""
 
     def __init__(self, ntoken, ninp, nhid, nlayers, dropout=0.5, num_classes=2):
@@ -246,7 +244,7 @@ class PositionalEncoding(nn.Module):
         x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
         
-class AlbertForSentimentAnalysis(SimpleNet):
+class AlbertForSentimentAnalysis(nn.Module):
     """
     Albert model for sentiment analysis.
     Uses the Albert tiny model as a base and adds a classification head.

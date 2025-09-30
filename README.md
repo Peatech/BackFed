@@ -15,7 +15,7 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
 
 - **Modular Architecture**: Easily extend with new attacks, defenses, models, and datasets.
 - **Parallel Execution**: Support for both sequential and parallel training modes using Ray with timeout mechanism for client training.
-- **Resource Tracking**: Clien-training and server aggregation are monitored based on memory usage and computation time.
+- **Resource Tracking**: Client training and server aggregation are monitored based on memory usage and computation time.
 - **Comprehensive Attack & Defense Library**: Implementation of various attacks and defenses in a standardized setting for a reliable benchmark.
 - **Flexible Configuration**: Hydra-based configuration system for easy experiment setup.
 - **Supported Logging**: WandB for real-time visualization and CSV logging for experiment tracking.
@@ -25,12 +25,12 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
 ## Project Structure
 
 ```
-FL_BackdoorBench/
+BackFed/
 ├── config/                 # Configuration files
 │   ├── base.yaml           # Base configuration
 │   ├── cifar10.yaml        # CIFAR-10 specific config
 │   ├── emnist.yaml         # EMNIST specific config
-│   ├── femnist.yaml        # EMNIST specific config
+│   ├── femnist.yaml        # FEMNIST specific config
 │   ├── reddit.yaml         # Reddit specific config
 │   ├── sentiment140.yaml   # Sentiment140 specific config
 │   └── atk_config/         # Attack configurations
@@ -51,7 +51,7 @@ FL_BackdoorBench/
 ├── csv_results/            # Experiment results
 ├── outputs/                # Hydra output logs
 ├── main.py                 # Main entry point
-└── requirements.txt         # Python dependencies
+└── requirements.txt        # Python dependencies
 ```
 
 ## Installation
@@ -67,8 +67,8 @@ FL_BackdoorBench/
 
 1. Clone the repository:
   ```bash
-  git clone https://github.com/thinh-dao/FL_BackdoorBench.git
-  cd FL_BackdoorBench
+  git clone https://github.com/thinh-dao/BackFed.git
+  cd BackFed
   ```
 
 2. Install dependencies in your environment:
@@ -91,7 +91,7 @@ By default, all configuration files in config folder (e.g., ```emnist.yaml```, `
 #### Basic Usage
 Choose a configuration file to run experiment:
 ```bash
-python main.py --cn cifar10 # Equivalent to config/cifar10.yaml
+python main.py --config-name cifar10  # Equivalent to config/cifar10.yaml
 ```
 
 For fine-grained control over parameters, you can:
@@ -116,7 +116,7 @@ Note that you can override specific parameters of an attack. For example, set da
 python main.py atk_config.data_poison_method=iba atk_config.data_poison_config.iba.atk_eps=0.1
 ```
 
-Simlilarly, to override defense configurations, change ```aggregator``` and ```aggregator_config```. For example, to use Trimmed-Mean defense with 20% trimming ratio:
+Similarly, to override defense configurations, change ```aggregator``` and ```aggregator_config```. For example, to use Trimmed-Mean defense with 20% trimming ratio:
 ```bash
 python main.py aggregator=trimmed_mean aggregator_config.trimmed_mean.trim_ratio=0.2
 ```

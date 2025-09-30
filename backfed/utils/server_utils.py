@@ -33,11 +33,12 @@ def test_vision_task(model, test_loader, device, loss_fn=torch.nn.CrossEntropyLo
             inputs = inputs.to(device, non_blocking=True)
             labels = labels.to(device, non_blocking=True)
             outputs = model(inputs)
-            loss += loss_fn(outputs, labels).item()
+            batch_loss = loss_fn(outputs, labels)
+            loss += batch_loss.item() * len(inputs)  # Accumulate total loss
             correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
             total_samples += len(inputs)
     accuracy = correct / total_samples
-    loss = loss / len(test_loader)
+    loss = loss / total_samples  # Average loss per sample
     return loss, accuracy
 
 def test_albert(model, test_loader, device, loss_fn=torch.nn.CrossEntropyLoss(), normalization=None):
@@ -75,12 +76,13 @@ def test_albert(model, test_loader, device, loss_fn=torch.nn.CrossEntropyLoss(),
                 outputs = model(inputs)
 
             # Compute loss and accuracy
-            loss += loss_fn(outputs, labels).item()
+            batch_loss = loss_fn(outputs, labels)
+            loss += batch_loss.item() * len(labels)  # Accumulate total loss
             correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
             total_samples += len(labels)
 
     accuracy = correct / total_samples
-    loss = loss / len(test_loader)
+    loss = loss / total_samples  # Average loss per sample
     return loss, accuracy
 
 def test_lstm_reddit(model: RNNLanguageModel, test_loader, device, loss_fn=torch.nn.CrossEntropyLoss(), normalization=None):

@@ -10,6 +10,7 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import pickle
+import hashlib
 
 from omegaconf import OmegaConf
 from torch.utils.data import Dataset
@@ -41,7 +42,9 @@ def hash_selected_keys(cfg, keys):
         if ok:
             pairs.append((key, make_hashable(d)))
 
-    return hash(tuple(sorted(pairs)))
+    # Use deterministic hash instead of Python's built-in hash()
+    content = str(tuple(sorted(pairs))).encode('utf-8')
+    return hashlib.md5(content).hexdigest()[:16]  # Use first 16 chars for shorter filename
 
 class FL_DataLoader:
     """
@@ -174,13 +177,15 @@ class FL_DataLoader:
         # Remove poison_index_cars samples from self.train_dataset
         self.trainset = torch.utils.data.Subset(self.trainset, [i for i in range(len(self.trainset)) if i not in poison_index_cars])
 
-    def prepare_dataset(self) -> Tuple[Dataset, Dict[int, List[int]], Dataset]:
+    def prepare_dataset(self) -> Tuple[Dataset, Dict[int, List[int]], Dict[int, List[int]], Dataset]:
         """
         Distribute the dataset for FL.
-        Returns:
-            trainset: The training dataset
-            client_data_indices: The indices of the training dataset for each participant
-            testset: The server evaluation dataset
+        
+        Returns
+            - trainset: The training dataset
+            - client_data_indices: The indices of the training dataset for each participant
+            - secret_dataset_indices: The indices of the secret dataset shared by malicious clients
+            - testset: The server evaluation dataset
         """
         # Initialize trainset and testset
         self.load_dataset(dataset_name=self.config["dataset"].upper())
@@ -190,8 +195,6 @@ class FL_DataLoader:
             keys = ["dataset", *distribution_keys, "num_clients", "seed"]
             if not self.config.no_attack:
                 keys.append("atk_config.malicious_clients")
-                if self.config.atk_config.mutual_dataset:
-                    keys.append("atk_config.num_attacker_samples")
                     
             hash_value = hash_selected_keys(self.config, keys)
             cache_file_path = os.path.join("data_splits", f"{hash_value}.pkl")
@@ -209,8 +212,21 @@ class FL_DataLoader:
         else:
             # Generate new data split
             self._generate_data_split(cache_file_path)
+        
+        # Create the secret dataset
+        if self.config.atk_config.secret_dataset:
+            secret_indices = []
+            sample_indices = list(range(len(self.trainset)))
+            for no_batch in range(self.config.atk_config.size_of_secret_dataset):
+                range_iter = random.sample(sample_indices,
+                                        self.config.client_config.batch_size)
+
+                secret_indices.extend(range_iter)
+            self.secret_dataset_indices = secret_indices
+        else:
+            self.secret_dataset_indices = None
             
-        return self.trainset, self.client_data_indices, self.testset
+        return self.trainset, self.client_data_indices, self.secret_dataset_indices, self.testset
 
     def _sample_dirichlet(self, cids, indices=None) -> Dict[int, List[int]]:
         """
@@ -262,7 +278,6 @@ class FL_DataLoader:
             sampled_probabilities = np.random.dirichlet(
                 np.array(no_participants * [self.config.alpha]))
             per_client_size = [round(sampled_probabilities[cid] * class_size) for cid in range(no_participants)]
-            random.shuffle(cids)
 
             for idx, cid in enumerate(cids):
                 no_imgs = per_client_size[idx] if idx != no_participants - 1 else len(class_indices[class_idx])
@@ -279,17 +294,8 @@ class FL_DataLoader:
         Args:
             cache_file_path (str): Path to save the cached data split
         """
-        # Determine which samples to use
-        if not self.config.no_attack and self.config.atk_config.mutual_dataset:
-            # Split the dataset into two subsets: clean and attacker-controlled samples
-            indices = list(range(len(self.trainset)))
-            attacker_indices = random.sample(indices, self.config.atk_config.num_attacker_samples)
-            sample_indices = [i for i in indices if i not in attacker_indices]
-            sample_cids = self.config.benign_clients
-        else:
-            attacker_indices = None
-            sample_indices = list(range(len(self.trainset)))
-            sample_cids = list(range(self.config.num_clients))
+        sample_indices = list(range(len(self.trainset)))
+        sample_cids = list(range(self.config.num_clients))
 
         # Handle debug mode
         if hasattr(self.config, 'debug') and self.config.debug:
@@ -307,15 +313,10 @@ class FL_DataLoader:
                 indices=sample_indices)
         else:
             raise ValueError(f"Partitioner {self.config.partitioner} is not supported.")
-
-        if attacker_indices is not None:
-            # Add attacker indices to the client data indices
-            for atk_id in self.config.atk_config.malicious_clients:
-                assert atk_id not in self.client_data_indices, f"Attacker client {atk_id} already exists in client_data_indices"
-                self.client_data_indices[atk_id] = attacker_indices
- 
+        
         # Cache the generated data split
         try:
+            os.makedirs('data_splits', exist_ok=True)
             with open(cache_file_path, 'wb') as f:
                 pickle.dump(self.client_data_indices, f)
             log(INFO, f"Cached client data indices to {os.path.basename(cache_file_path)}")

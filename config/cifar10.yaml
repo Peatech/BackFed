@@ -36,7 +36,7 @@ dataset: CIFAR10 # CIFAR10, CIFAR100, TinyImageNet, MNIST
 datapath: data
 task: classification
 partitioner: dirichlet # Choose from [uniform, dirichlet]
-alpha: 0.5 # Dirichlet distribution parameter
+alpha: 0.9 # Dirichlet distribution parameter
 normalize: True # Normalize the dataset
 
 # *Model configuration
@@ -57,3 +57,14 @@ client_config:
   optimizer: sgd # Choose from the key in optimizer section below. Will be overridden to store DictConfig in client_optimizer_config
   lr: 0.1
   weight_decay: 5e-4
+
+########################################################
+# *Aggregator configuration (overrides base.yaml)
+aggregator_config:
+  weighted_fedavg:
+    _target_: backfed.servers.WeightedFedAvgServer
+    eta: 1
+
+  unweighted_fedavg:
+    _target_: backfed.servers.UnweightedFedAvgServer
+    eta: 0.5

@@ -21,8 +21,7 @@ poison_convergence_threshold: 0.1 # If backdoor loss is less than this threshold
 follow_protocol: True # whether to follow training protocol from the server (e.g., for FedProx, Differential Privacy, etc.)
 
 # *Dataset settings
-mutual_dataset: False # Whether the attacker and the server share the same dataset
-num_attacker_samples: 640 # Number of clean samples that attacker holds, if mutual_dataset is True
+secret_dataset: False # Whether all malicious clients uses the same secret dataset for poisoning
 
 # *PGD settings
 poisoned_is_projection: False # PGD or not

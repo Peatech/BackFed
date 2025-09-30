@@ -36,7 +36,8 @@ class FlameServer(AnomalyDetectionServer, RobustAggregationServer):
     def detect_anomalies(self, client_updates: List[Tuple[client_id, num_examples, StateDict]]):
         # Keep everything on CPU for this function
         client_ids = [client_id for client_id, _, _ in client_updates]
-        last_layers = self._get_last_layers(self.global_model_params)
+        global_state_dict = {name: param.data for name, param in self.global_model.state_dict().items()}
+        last_layers = self._get_last_layers(global_state_dict)
 
         # Extract weights and compute distances
         all_client_weights = []
@@ -47,9 +48,9 @@ class FlameServer(AnomalyDetectionServer, RobustAggregationServer):
             current_client_weight = []
 
             for name, param in update.items():
-                if 'weight' in name or 'bias' in name:
-                    # Move both tensors to the same device (GPU) before subtraction
-                    diff = param.to(self.device) - self.global_model_params[name]
+                # Move both tensors to the same device (GPU) before subtraction
+                if name in global_state_dict:
+                    diff = param.to(self.device) - global_state_dict[name].to(self.device)
                     flat_update.append(diff.flatten())  # Keep as torch.Tensor
 
                 if name in last_layers:
@@ -106,36 +107,33 @@ class FlameServer(AnomalyDetectionServer, RobustAggregationServer):
 
         weight_accumulator = {
             name: torch.zeros_like(param, device=self.device)
-            for name, param in self.global_model_params.items()
+            for name, param in self.global_model.state_dict().items()
         }
 
+        weight = 1 / len(benign_clients)
+        global_state_dict = self.global_model.state_dict()
         for idx, (client_id, num_examples, update) in enumerate(client_updates):
             if client_id in malicious_clients:
                 continue
-
-            weight = 1 / len(benign_clients)
+            
             for name, param in update.items():
-                if name.endswith('num_batches_tracked'):
+                if any(pattern in name for pattern in self.ignore_weights):
                     continue
-                if 'tied' in name and 'decoder.weight' in name or '__' in name:
-                    continue
-                
-                diff = (param.to(self.device) - self.global_model_params[name])
-                if ('weight' in name or 'bias' in name) and euclidean_distances[idx] > clip_norm:
+                diff = (param.to(self.device) - global_state_dict[name])
+                if euclidean_distances[idx] > clip_norm:
                     diff *= clip_norm / euclidean_distances[idx]
-
                 weight_accumulator[name].add_(diff * weight)
 
         # Update global model and add noise
-        for name, param in self.global_model_params.items():
-            if name.endswith('num_batches_tracked'):
+        for name, param in self.global_model.state_dict().items():
+            if any(pattern in name for pattern in self.ignore_weights):
                 continue
-            param.add_(weight_accumulator[name] * self.eta)
+            param.data.add_(weight_accumulator[name] * self.eta)
 
             # Add noise to parameters that are not buffer parameters
-            if 'weight' in name or 'bias' in name:
-                std = self.lamda * clip_norm * torch.std(param)
+            if "running" not in name and "num_batches_tracked" not in name:
+                std = self.lamda * clip_norm.item() * torch.std(param).item()
                 noise = torch.normal(0, std, param.shape, device=param.device)
-                param.add_(noise)
+                param.data.add_(noise)
 
         return True

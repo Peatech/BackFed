@@ -27,7 +27,7 @@ poison_until_convergence: False # If true, train until the backdoor loss converg
 follow_protocol: True # whether to follow training protocol from the server (e.g., for FedProx, Differential Privacy, etc.)
 
 # *Dataset settings
-mutual_dataset: False # Whether the attacker and the server share the same dataset
+secret_dataset: False # Whether all malicious clients uses the same secret dataset for poisoning
 
 # *Poisoning settings
 attack_type: "all2one" # Only support "all2one" for Sentiment140

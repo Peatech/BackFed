@@ -1,39 +1,12 @@
+'''
+ResNet models specifically for MNIST/EMNIST/FEMNIST datasets.
+Based on: https://github.com/kuangliu/pytorch-cifar/blob/master/models/resnet.py
+Modified for grayscale (1-channel) input and MNIST variants.
+'''
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .simple import SimpleNet
 
-def conv_block(in_channels, out_channels, pool=False):
-    layers = [nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1), 
-            nn.BatchNorm2d(out_channels), 
-            nn.ReLU(inplace=True)]
-    if pool: layers.append(nn.MaxPool2d(2))
-    return nn.Sequential(*layers)
-
-class ResNet9(SimpleNet):
-    def __init__(self, in_channels, num_classes):
-        super().__init__()
-        
-        self.conv1 = conv_block(in_channels, 64)
-        self.conv2 = conv_block(64, 128, pool=True)
-        self.res1 = nn.Sequential(conv_block(128, 128), conv_block(128, 128))
-        self.conv3 = conv_block(128, 256, pool=True)
-        self.conv4 = conv_block(256, 512, pool=True)
-        self.res2 = nn.Sequential(conv_block(512, 512), conv_block(512, 512))
-        self.avgpool = nn.AdaptiveAvgPool2d((1,1))
-        self.fc = nn.Linear(512, num_classes)
-        
-    def forward(self, xb):
-        out = self.conv1(xb)
-        out = self.conv2(out)
-        out = self.res1(out) + out
-        out = self.conv3(out)
-        out = self.conv4(out)
-        out = self.res2(out) + out
-        out = self.avgpool(out)
-        out = out.view(out.size(0), -1)
-        out = self.fc(out)
-        return out
-    
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -57,6 +30,7 @@ class BasicBlock(nn.Module):
         out += self.shortcut(x)
         out = F.relu(out)
         return out
+
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -85,19 +59,19 @@ class Bottleneck(nn.Module):
         out = F.relu(out)
         return out
 
-class MNIST_ResNet(SimpleNet):
+class ResNet(nn.Module):
     def __init__(self, block, num_blocks, num_classes=10):
-        super(MNIST_ResNet, self).__init__()
+        super(ResNet, self).__init__()
         self.in_planes = 32
-        # Convolution with 1 input channel
+        
+        # Always use 1-channel input for MNIST variants
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(32)
         self.layer1 = self._make_layer(block, 32, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 64, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 128, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 256, num_blocks[3], stride=2)
-        self.avgpool = nn.AdaptiveAvgPool2d((1,1))
-        self.fc = nn.Linear(256*block.expansion, num_classes)
+        self.linear = nn.Linear(256*block.expansion, num_classes)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
@@ -113,19 +87,62 @@ class MNIST_ResNet(SimpleNet):
         out = self.layer2(out)
         out = self.layer3(out)
         out = self.layer4(out)
-        out = self.avgpool(out)
+        out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
-        out = self.fc(out)
+        out = self.linear(out)
         return out
 
-def mnist_resnet9(num_classes=10):
-    return ResNet9(in_channels=1, num_classes=num_classes)
+# Factory functions for MNIST ResNet variants
+def ResNet18(num_classes=10):
+    """ResNet18 for MNIST variants (1-channel input)"""
+    return ResNet(BasicBlock, [2,2,2,2], num_classes=num_classes)
 
-def mnist_resnet18(num_classes=10):
-    return MNIST_ResNet(BasicBlock, [2,2,2,2], num_classes=num_classes)
+def ResNet34(num_classes=10):
+    """ResNet34 for MNIST variants (1-channel input)"""
+    return ResNet(BasicBlock, [3,4,6,3], num_classes=num_classes)
 
-def mnist_resnet34(num_classes=10):
-    return MNIST_ResNet(BasicBlock, [3,4,6,3], num_classes=num_classes)
+def ResNet50(num_classes=10):
+    """ResNet50 for MNIST variants (1-channel input)"""
+    return ResNet(Bottleneck, [3,4,6,3], num_classes=num_classes)
 
-def mnist_resnet50(num_classes=10):
-    return MNIST_ResNet(Bottleneck, [3,4,6,3], num_classes=num_classes)
+def ResNet101(num_classes=10):
+    """ResNet101 for MNIST variants (1-channel input)"""
+    return ResNet(Bottleneck, [3,4,23,3], num_classes=num_classes)
+
+def ResNet152(num_classes=10):
+    """ResNet152 for MNIST variants (1-channel input)"""
+    return ResNet(Bottleneck, [3,8,36,3], num_classes=num_classes)
+
+def get_mnist_resnet_model(model_name, num_classes=10):
+    """
+    Factory function for MNIST ResNet models.
+    
+    Args:
+        model_name: ResNet variant ('resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152')
+        num_classes: Number of output classes (default: 10 for MNIST, 62 for EMNIST, 62 for FEMNIST)
+    """
+    model_name_lower = model_name.lower()
+    if model_name_lower == 'resnet18':
+        return ResNet18(num_classes=num_classes)
+    elif model_name_lower == 'resnet34':
+        return ResNet34(num_classes=num_classes)
+    elif model_name_lower == 'resnet50':
+        return ResNet50(num_classes=num_classes)
+    elif model_name_lower == 'resnet101':
+        return ResNet101(num_classes=num_classes)
+    elif model_name_lower == 'resnet152':
+        return ResNet152(num_classes=num_classes)
+    else:
+        raise ValueError(f"Unknown ResNet model: {model_name}")
+
+def test():
+    """Test function for MNIST ResNet"""
+    net = ResNet18()
+    # Test with 28x28 grayscale image (typical MNIST size)
+    x = torch.randn(1, 1, 28, 28)
+    y = net(x)
+    print(f"Input shape: {x.shape}")
+    print(f"Output shape: {y.shape}")
+
+if __name__ == '__main__':
+    test()

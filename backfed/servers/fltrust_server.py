@@ -24,7 +24,7 @@ class FLTrustServer(RobustAggregationServer):
         """Convert parameters dictionary to flat vector, excluding batch norm parameters."""
         vec = []
         for key, param in net_dict.items():
-            if any(x in key.split('.')[-1] for x in ['num_batches_tracked', 'running_mean', 'running_var']):
+            if any(x in key for x in ['num_batches_tracked', 'running_mean', 'running_var']):
                 continue
             vec.append(param.reshape(-1))
         return torch.cat(vec)
@@ -81,13 +81,12 @@ class FLTrustServer(RobustAggregationServer):
             return False
 
         # Update global model parameters in-place
-        with torch.no_grad():
-            for key, param in self.global_model_params.items():
-                if key.endswith('num_batches_tracked'):
-                    continue
-                else:
-                    update = (sum_parameters[key] / total_score)
-                    param.add_(update * self.eta)
+        for name, param in self.global_model.state_dict().items():
+            if any(pattern in name for pattern in self.ignore_weights):
+                continue
+            if name in sum_parameters:
+                update = (sum_parameters[name] / total_score)
+                param.data.add_(update * self.eta)
 
         return True
 

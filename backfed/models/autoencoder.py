@@ -1,9 +1,8 @@
 import torch.nn as nn
-from .simple import SimpleNet
 
-class Autoencoder(SimpleNet):
+class Autoencoder(nn.Module):
     def __init__(self):
-        super().__init__()
+        super(Autoencoder, self).__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(3, 16, 4, stride=2, padding=1),
             nn.BatchNorm2d(16),

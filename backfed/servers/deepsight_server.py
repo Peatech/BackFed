@@ -171,27 +171,27 @@ class DeepSightServer(AnomalyDetectionServer, RobustAggregationServer):
         # Aggregate benign updates with clipped differences
         weight_accumulator = {
             name: torch.zeros_like(param, device=self.device)
-            for name, param in self.global_model_params.items()
+            for name, param in self.global_model.named_parameters()
         }
 
+        global_state_dict = dict(self.global_model.named_parameters())
         for idx, (client_id, _, update) in enumerate(client_updates):
             if client_id in malicious_clients:
                 continue
             weight = 1 / len(benign_clients)
             for name, param in update.items():
-                if name.endswith('num_batches_tracked'):
-                    continue
-                diff = (param.to(self.device) - self.global_model_params[name])
-                if ('weight' in name or 'bias' in name) and euclidean_distances[idx] > clip_norm:
-                    diff *= clip_norm / euclidean_distances[idx]
+                if name in global_state_dict:
+                    diff = (param.to(self.device) - global_state_dict[name])
+                    if euclidean_distances[idx] > clip_norm:
+                        diff *= clip_norm / euclidean_distances[idx]
 
-                weight_accumulator[name].add_(diff * weight)
+                    weight_accumulator[name].add_(diff * weight)
 
         # Update global model and add noise
-        for name, param in self.global_model_params.items():
+        for name, param in self.global_model.named_parameters():
             if name.endswith('num_batches_tracked'):
                 continue
-            param.add_(weight_accumulator[name] * self.eta)
+            param.data.add_(weight_accumulator[name] * self.eta)
         return True
 
     def _calculate_neups(self, local_model_updates: List[StateDict], num_classes: int, last_layer_name: str) -> Tuple[List[float], List[float], List[float]]:
@@ -201,18 +201,19 @@ class DeepSightServer(AnomalyDetectionServer, RobustAggregationServer):
         last_layer_bias_name = last_layer_name + ".bias"
 
         # Calculate update norms and NEUPs
+        global_state_dict = {name: param.data for name, param in self.global_model.named_parameters()}
         for local_model_update in local_model_updates:
             # Calculate Euclidean distance
             flat_update = []
             for name, param in local_model_update.items():
-                if 'weight' in name or 'bias' in name:
-                    diff = param - self.global_model_params[name]
+                if name in global_state_dict:
+                    diff = param - global_state_dict[name]
                     flat_update.append(diff.flatten())  # Keep as torch.Tensor
             euclidean_distances.append(torch.linalg.norm(torch.cat(flat_update)))
 
             # Calculate NEUPs
-            diff_weight = torch.sum(torch.abs(local_model_update[last_layer_weight_name] - self.global_model_params[last_layer_weight_name]), dim=1) # weight
-            diff_bias = torch.abs(local_model_update[last_layer_bias_name] - self.global_model_params[last_layer_bias_name]) # bias
+            diff_weight = torch.sum(torch.abs(local_model_update[last_layer_weight_name] - global_state_dict[last_layer_weight_name]), dim=1) # weight
+            diff_bias = torch.abs(local_model_update[last_layer_bias_name] - global_state_dict[last_layer_bias_name]) # bias
 
             UPs_squared = (diff_bias + diff_weight) ** 2
             NEUP = UPs_squared / torch.sum(UPs_squared)
@@ -273,12 +274,13 @@ class DeepSightServer(AnomalyDetectionServer, RobustAggregationServer):
 
         # Get last layer parameters
         bias_name = last_layer_name + ".bias"
+        global_state_dict = {name: param.data for name, param in self.global_model.named_parameters()}
 
         for i in range(N):
             for j in range(i + 1, N):
                 # Get bias differences
-                bias_i = local_model_updates[i][bias_name] - self.global_model_params[bias_name].to(self.device)
-                bias_j = local_model_updates[j][bias_name] - self.global_model_params[bias_name].to(self.device)
+                bias_i = local_model_updates[i][bias_name] - global_state_dict[bias_name].to(self.device)
+                bias_j = local_model_updates[j][bias_name] - global_state_dict[bias_name].to(self.device)
 
                 # Calculate cosine distance using PyTorch (preserving your optimization)
                 bias_i_flat = bias_i.flatten()

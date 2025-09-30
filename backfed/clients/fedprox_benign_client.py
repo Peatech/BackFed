@@ -57,9 +57,6 @@ class FedProxClient(BenignClient):
         global_params_tensor = torch.cat([param.view(-1).detach().clone().requires_grad_(False) for name, param in train_package["global_model_params"].items()
                     if "weight" in name or "bias" in name]).to(self.device)
                         
-        # Initialize training tools
-        scaler = torch.amp.GradScaler(device=self.device)
-
         # Training loop
         self.model.train()
         for internal_epoch in range(self.client_config.local_epochs):
@@ -82,19 +79,17 @@ class FedProxClient(BenignClient):
                     images = normalization(images)
 
                 # Forward pass and loss computation
-                with torch.amp.autocast("cuda"):
-                    outputs = self.model(images)
-                    loss = self.criterion(outputs, labels)
+                outputs = self.model(images)
+                loss = self.criterion(outputs, labels)
 
-                    proximal_term = self.model_dist(global_params_tensor=global_params_tensor, gradient_calc=True)
-                    loss += (proximal_mu / 2) * proximal_term
+                proximal_term = self.model_dist(global_params_tensor=global_params_tensor, gradient_calc=True)
+                loss += (proximal_mu / 2) * proximal_term
 
-                # Backward pass with gradient masking
-                scaler.scale(loss).backward()
+                # Backward pass
+                loss.backward()
 
                 # Optimizer step
-                scaler.step(self.optimizer)
-                scaler.update()
+                self.optimizer.step()
 
                 running_loss += loss.item() * len(labels)
                 epoch_correct += (outputs.argmax(dim=1) == labels).sum().item()

@@ -299,7 +299,12 @@ class FLDetectorServer(AnomalyDetectionServer):
                 log(WARNING, f"FLDetector: Skipping client {client_id}")
                 continue
 
-            grad_params = [param.detach().to(self.device) - self.global_model_params[name].detach() for name, param in client_update.items() if "weight" in name or "bias" in name]
+            global_state_dict = self.global_model.state_dict()
+            grad_params = [
+                param.detach().to(self.device) - global_state_dict[name].detach().to(self.device) 
+                for name, param in client_update.items() 
+                if name in global_state_dict and not any(skip_name in name for skip_name in ['running_mean', 'running_var', 'num_batches_tracked'])
+            ]
             self.grad_list.append(grad_params)
             client_ids.append(client_id)
 
@@ -307,7 +312,11 @@ class FLDetectorServer(AnomalyDetectionServer):
         param_list = [torch.concat([p.reshape(-1, 1) for p in params], dim=0) for params in self.grad_list]
 
         # Get current global weights (keeping on device)
-        current_weight_vector = torch.concat([param.reshape(-1, 1) for name, param in self.global_model_params.items() if "weight" in name or "bias" in name], dim=0)
+        current_weight_vector = torch.concat([
+            param.reshape(-1, 1) 
+            for name, param in self.global_model.state_dict().items() 
+            if not any(skip_name in name for skip_name in ['running_mean', 'running_var', 'num_batches_tracked'])
+        ], dim=0)
 
         # Calculate HVP if enough rounds have passed
         hvp = None
@@ -381,7 +390,6 @@ class FLDetectorServer(AnomalyDetectionServer):
 
                     # Reset model and tracking variables
                     self.global_model.load_state_dict(self.init_model)
-                    self.global_model_params = {name: param.detach().clone().to(self.device) for name, param in self.global_model.state_dict().items()}
                     self.start_round = self.current_round
 
                     # reset all tracking variables (except exclude_list)

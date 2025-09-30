@@ -79,9 +79,6 @@ class SentimentMaliciousClient(MaliciousClient):
         # Setup training protocol
         proximal_mu = train_package.get('proximal_mu', None) if self.atk_config.follow_protocol else None
 
-        # Initialize training tools
-        scaler = torch.amp.GradScaler(device=self.device)
-
         if self.atk_config.poisoned_is_projection or proximal_mu is not None:
             global_params_tensor = torch.cat([param.view(-1).detach().clone().requires_grad_(False) for name, param in train_package["global_model_params"].items()
                                   if "weight" in name or "bias" in name]).to(self.device)
@@ -120,59 +117,57 @@ class SentimentMaliciousClient(MaliciousClient):
                 labels = labels.to(self.device)
                 
                 # Forward pass and loss computation
-                with torch.amp.autocast("cuda"):
-                    if self.atk_config.poison_mode == "multi_task":
-                        # Handle multi-task poisoning
-                        clean_inputs = copy.deepcopy(inputs)
-                        clean_labels = labels.detach().clone()
-                        poisoned_inputs = self.poison_module.poison_inputs(inputs)
-                        poisoned_labels = self.poison_module.poison_labels(labels)
+                if self.atk_config.poison_mode == "multi_task":
+                    # Handle multi-task poisoning
+                    clean_inputs = copy.deepcopy(inputs)
+                    clean_labels = labels.detach().clone()
+                    poisoned_inputs = self.poison_module.poison_inputs(inputs)
+                    poisoned_labels = self.poison_module.poison_labels(labels)
 
-                        # Compute losses for both clean and poisoned data in a single forward pass
-                        clean_output = self.model(**inputs)
-                        poisoned_output = self.model(**poisoned_inputs)
+                    # Compute losses for both clean and poisoned data in a single forward pass
+                    clean_output = self.model(**inputs)
+                    poisoned_output = self.model(**poisoned_inputs)
 
-                        clean_loss = self.criterion(clean_output, clean_labels)
-                        poisoned_loss = self.criterion(poisoned_output, poisoned_labels)
+                    clean_loss = self.criterion(clean_output, clean_labels)
+                    poisoned_loss = self.criterion(poisoned_output, poisoned_labels)
 
-                        # Extract logits from transformer outputs if needed
-                        if isinstance(outputs, dict):
-                            outputs = outputs.logits if hasattr(outputs, 'logits') else outputs['logits']
-                            
-                        # Combine losses according to attack alpha
-                        loss = (self.atk_config.attack_alpha * poisoned_loss +
-                               (1 - self.atk_config.attack_alpha) * clean_loss)
-
-                    elif self.atk_config.poison_mode in ["online", "offline"]:
-                        if self.atk_config.poison_mode == "online":
-                            inputs, labels = self.poison_module.poison_batch(batch=(inputs, labels))
-
-                        # Forward pass and loss computation
-                        outputs = self.model(**inputs)
+                    # Extract logits from transformer outputs if needed
+                    if isinstance(outputs, dict):
+                        outputs = outputs.logits if hasattr(outputs, 'logits') else outputs['logits']
                         
-                        # Extract logits from transformer outputs if needed
-                        if isinstance(outputs, dict):
-                            outputs = outputs.logits if hasattr(outputs, 'logits') else outputs['logits']
-                            
-                        loss = self.criterion(outputs, labels)
+                    # Combine losses according to attack alpha
+                    loss = (self.atk_config.attack_alpha * poisoned_loss +
+                           (1 - self.atk_config.attack_alpha) * clean_loss)
 
-                    else:
-                        raise ValueError(
-                            f"Invalid poison_mode: {self.atk_config.poison_mode}. "
-                            f"Expected one of: ['multi_task', 'online', 'offline']"
-                        )
+                elif self.atk_config.poison_mode in ["online", "offline"]:
+                    if self.atk_config.poison_mode == "online":
+                        inputs, labels = self.poison_module.poison_batch(batch=(inputs, labels))
+
+                    # Forward pass and loss computation
+                    outputs = self.model(**inputs)
                     
-                    # Add proximal term if needed
-                    if proximal_mu is not None:
-                        proximal_term = self.model_dist(global_params_tensor=global_params_tensor, gradient_calc=True)
-                        loss += (proximal_mu / 2) * proximal_term
+                    # Extract logits from transformer outputs if needed
+                    if isinstance(outputs, dict):
+                        outputs = outputs.logits if hasattr(outputs, 'logits') else outputs['logits']
+                        
+                    loss = self.criterion(outputs, labels)
+
+                else:
+                    raise ValueError(
+                        f"Invalid poison_mode: {self.atk_config.poison_mode}. "
+                        f"Expected one of: ['multi_task', 'online', 'offline']"
+                    )
+                
+                # Add proximal term if needed
+                if proximal_mu is not None:
+                    proximal_term = self.model_dist(global_params_tensor=global_params_tensor, gradient_calc=True)
+                    loss += (proximal_mu / 2) * proximal_term
 
                 # Backward pass
-                scaler.scale(loss).backward()
+                loss.backward()
 
                 # Optimizer step
-                scaler.step(self.optimizer)
-                scaler.update()
+                self.optimizer.step()
 
                 # Project poisoned model parameters
                 if self.atk_config.poisoned_is_projection and \

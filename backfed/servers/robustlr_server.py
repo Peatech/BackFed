@@ -36,12 +36,12 @@ class RobustLRServer(RobustAggregationServer):
         log(INFO, f"Initialized RobustLR server with threshold={robustLR_threshold}, eta={eta}")
 
     def _parameters_dict_to_vector(self, state_dict: StateDict) -> torch.Tensor:
-        """Convert parameters dictionary to flat vector."""
+        """Convert parameters dictionary to flat vector, excluding BatchNorm buffers."""
         vec = []
-        for name, param in state_dict.items():
-            if 'bias' in name or 'weight' in name:
-                vec.append(param.view(-1))
-        return torch.cat(vec).to(self.device)
+        for name in self.global_model.named_parameters().keys():  # Only trainable params
+            if name in state_dict:  # Safety check
+                vec.append(state_dict[name].view(-1))
+        return torch.cat(vec)
 
     def _compute_robustLR(self, client_updates: List[torch.Tensor]) -> torch.Tensor:
         """
@@ -80,7 +80,8 @@ class RobustLRServer(RobustAggregationServer):
         update_vectors = []
         weights = []
 
-        global_vector = self._parameters_dict_to_vector(self.global_model_params)
+        global_state_dict = self.global_model.state_dict()
+        global_vector = self._parameters_dict_to_vector(global_state_dict)
         for client_id, num_examples, update in client_updates:
             # Convert update to vector
             update_vector = self._parameters_dict_to_vector(update)
@@ -105,21 +106,21 @@ class RobustLRServer(RobustAggregationServer):
         weighted_updates *= lr_vector
 
         # Update global model parameters
-        global_vector = self._parameters_dict_to_vector(self.global_model_params)
+        global_state_dict = {name: param.data for name, param in self.global_model.state_dict().items()}
+        global_vector = self._parameters_dict_to_vector(global_state_dict)
         new_global_vector = global_vector + weighted_updates
 
         # Convert vector back to state dict
         idx = 0
-        for name, param in self.global_model_params.items():
-            if 'bias' in name or 'weight' in name:
-                param_size = param.numel()
-                param_shape = param.shape
+        for name, param in self.global_model.named_parameters():
+            param_size = param.numel()
+            param_shape = param.shape
 
-                # Extract the corresponding segment from the new global vector
-                param_vector = new_global_vector[idx:idx+param_size]
-                self.global_model_params[name] = param_vector.reshape(param_shape)
+            # Extract the corresponding segment from the new global vector
+            param_vector = new_global_vector[idx:idx+param_size]
+            param.data.copy_(param_vector.reshape(param_shape))
 
-                idx += param_size
+            idx += param_size
 
         log(INFO, f"RobustLR: Applied learning rates with {(lr_vector > 0).sum().item()} positive and {(lr_vector < 0).sum().item()} negative rates")
 

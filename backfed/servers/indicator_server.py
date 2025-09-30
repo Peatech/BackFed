@@ -170,7 +170,6 @@ class IndicatorServer(AnomalyDetectionServer):
         aggregate_time_start = time.time()
             
         if self.aggregate_client_updates(client_updates):
-            self.global_model.load_state_dict(self.global_model_params, strict=True)
             aggregated_metrics = self.aggregate_client_metrics(client_metrics)
         else:
             log(WARNING, "No client updates to aggregate. Global model parameters are not updated.")
@@ -238,8 +237,6 @@ class IndicatorServer(AnomalyDetectionServer):
             metrics = self.server_evaluate(round_number=round, model=self.check_model)
             log(INFO, f"benign acc: {metrics['test_clean_acc']}, benign loss: {metrics['test_clean_loss']}")
 
-            ### Update global_model_params
-            self.global_model_params = {name: param.detach().clone().to(self.device) for name, param in self.global_model.state_dict().items()}
         return True
     
     def _get_ood_data(self):

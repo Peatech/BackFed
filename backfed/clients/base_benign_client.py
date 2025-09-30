@@ -85,9 +85,6 @@ class BenignClient(BaseClient):
         server_round = train_package["server_round"]
         normalization = train_package.get("normalization", None)
                         
-        # Initialize training tools
-        scaler = torch.amp.GradScaler(device=self.device)
-
         # Training loop
         self.model.train()
         for internal_epoch in range(self.client_config.local_epochs):
@@ -110,16 +107,14 @@ class BenignClient(BaseClient):
                     images = normalization(images)
 
                 # Forward pass and loss computation
-                with torch.amp.autocast("cuda"):
-                    outputs = self.model(images)
-                    loss = self.criterion(outputs, labels)
+                outputs = self.model(images)
+                loss = self.criterion(outputs, labels)
 
-                # Backward pass with gradient masking
-                scaler.scale(loss).backward()
+                # Backward pass
+                loss.backward()
 
                 # Optimizer step
-                scaler.step(self.optimizer)
-                scaler.update()
+                self.optimizer.step()
 
                 running_loss += loss.item() * len(labels)
                 epoch_correct += (outputs.argmax(dim=1) == labels).sum().item()
@@ -262,7 +257,6 @@ class BenignClient(BaseClient):
         server_round = train_package["server_round"]
 
         start_time = time.time()
-        scaler = torch.amp.GradScaler(device=self.device)
 
         # Training loop
         self.model.train()
@@ -289,16 +283,14 @@ class BenignClient(BaseClient):
                 if isinstance(outputs, dict):
                     outputs = outputs.logits if hasattr(outputs, 'logits') else outputs['logits']
 
-
                 # Compute loss
                 loss = self.criterion(outputs, labels)
 
                 # Backward pass
-                scaler.scale(loss).backward()
+                loss.backward()
 
                 # Optimizer step
-                scaler.step(self.optimizer)
-                scaler.update()
+                self.optimizer.step()
 
                 # Accumulate loss
                 running_loss += loss.item() * len(labels)

@@ -31,7 +31,8 @@ from backfed.utils import (
     format_time_hms
 )
 from backfed.context_actor import ContextActor
-from backfed.clients import ClientApp, BenignClient, MaliciousClient
+from backfed.clients import BenignClient, MaliciousClient
+from backfed.client_app import ClientApp
 from backfed.poisons import Poison, IBA, A3FL
 from backfed.const import StateDict, Metrics, client_id, num_examples
 from logging import INFO, WARNING
@@ -43,7 +44,8 @@ class BaseServer:
     Base class for all FL servers.
     """
     defense_categories = ["base"]
-
+    ignore_weights = ["num_batches_tracked"] # Ignore non-differentiable parameters during aggregation
+    
     def __init__(self, server_config, server_type = "base", **kwargs):
         """
         Initialize the server.
@@ -71,9 +73,6 @@ class BaseServer:
         # Get initial model
         self._init_model()
         self.current_round = self.start_round
-
-        # Global model parameters that are sent to clients and updated by aggregate_client_updates function
-        self.global_model_params = {name: param.detach().clone().to(self.device) for name, param in self.global_model.state_dict().items()}
 
         # Initialize the client_manager and get the rounds_selection
         self._init_client_manager(config=server_config, start_round=self.start_round)
@@ -152,14 +151,16 @@ class BaseServer:
             client_config_ref = ray.put(self.config.client_config)
             dataset_ref = ray.put(self.trainset)
             dataset_indices_ref = ray.put(self.client_data_indices)
+            secret_dataset_indices_ref = ray.put(self.secret_dataset_indices)
 
             self.trainer : FLTrainer = FLTrainer(server=self,
                 mode=self.config.training_mode,
                 clientapp_init_args=dict(
-                    model=model_ref,
                     client_config=client_config_ref,
+                    model=model_ref,
                     dataset=dataset_ref,
                     dataset_partition=dataset_indices_ref,
+                    secret_dataset_indices=secret_dataset_indices_ref
                 )
             )
 
@@ -167,10 +168,11 @@ class BaseServer:
             self.trainer : FLTrainer = FLTrainer(server=self,
                 mode=self.config.training_mode,
                 clientapp_init_args=dict(
-                    model=copy.deepcopy(self.global_model),
                     client_config=self.config.client_config,
+                    model=copy.deepcopy(self.global_model),
                     dataset=self.trainset,
-                    dataset_partition=self.client_data_indices
+                    dataset_partition=self.client_data_indices,
+                    secret_dataset_indices=self.secret_dataset_indices
                 )
             )
 
@@ -200,9 +202,10 @@ class BaseServer:
         self.fl_dataloader = FL_DataLoader(config=self.config)
         if self.config.dataset.upper() in ["REDDIT", "FEMNIST", "SENTIMENT140"]:
             check_download(self.config.dataset.upper())
-            self.trainset, self.client_data_indices, self.testset = None, None, nonIID_Dataset(dataset_name=self.config.dataset, config=self.config, client_id=-1)
+            self.trainset, self.client_data_indices, self.secret_dataset_indices = None, None, None 
+            self.testset = nonIID_Dataset(dataset_name=self.config.dataset, config=self.config, client_id=-1)
         else:
-            self.trainset, self.client_data_indices, self.testset = self.fl_dataloader.prepare_dataset() 
+            self.trainset, self.client_data_indices, self.secret_dataset_indices, self.testset = self.fl_dataloader.prepare_dataset() 
         
         self.test_loader = DataLoader(self.testset, 
                                     batch_size=self.config.test_batch_size, 
@@ -228,7 +231,8 @@ class BaseServer:
 
         elif isinstance(self.config.checkpoint, int): # Load from specific round
             # Load from checkpoint
-            save_dir = os.path.join(os.getcwd(), "checkpoints", f"{self.config.dataset.upper()}_{self.config.aggregator}")
+            eta = self.config.aggregator_config[self.config.aggregator]['eta']
+            save_dir = os.path.join(os.getcwd(), "checkpoints", f"{self.config.dataset.upper()}_{self.config.aggregator}_{eta}")
             if self.config.partitioner == "uniform":
                 model_path = f"{self.config.model}_round_{self.config.checkpoint}_uniform.pth"
             else:
@@ -272,9 +276,11 @@ class BaseServer:
             else:
                 model_filename = f"{self.config.model}_round_{self.current_round}_uniform.pth"
 
-            save_dir = os.path.join(os.getcwd(), "checkpoints", f"{self.config.dataset.upper()}_{self.config.aggregator}")
+            eta = self.config.aggregator_config[self.config.aggregator]['eta']
+            save_dir = os.path.join(os.getcwd(), "checkpoints", f"{self.config.dataset.upper()}_{self.config.aggregator}_{eta}")
             os.makedirs(save_dir, exist_ok=True)
             save_path = os.path.join(save_dir, model_filename)
+            
             # Create a dictionary with metrics, model state, server_round, and model_name
             save_dict = {
                 'metrics': self.best_metrics,
@@ -310,11 +316,11 @@ class BaseServer:
         """
         Get the global model parameters.
         """
-        return {name: param.detach().clone().to("cpu") for name, param in self.global_model_params.items()}
+        return {name: param.detach().clone() for name, param in self.global_model.state_dict().items()}
 
     def aggregate_client_updates(self, client_updates: List[Tuple[client_id, num_examples, StateDict]]) -> bool:
         """
-        Aggregates client updates to update global model parameters (self.global_model_params)
+        Aggregates client updates to update global model parameters (self.global_model)
 
         Args:
             client_updates: List of (client_id, num_examples, model_updates)
@@ -400,7 +406,6 @@ class BaseServer:
         aggregate_time_start = time.time()
 
         if self.aggregate_client_updates(client_updates):
-            self.global_model.load_state_dict(self.global_model_params, strict=True)
             aggregated_metrics = self.aggregate_client_metrics(client_metrics)
         else:
             log(WARNING, "No client updates to aggregate. Global model parameters are not updated.")
@@ -566,7 +571,7 @@ class BaseServer:
             round_time = round_end_time - round_start_time
             log(INFO, f"Round {self.current_round} completed in {round_time:.2f} seconds")
 
-            # Use separate log calls for better formatting
+            # Centralized metrics
             log(INFO, "═══ Centralized Metrics ═══")
             log(INFO, server_metrics)
             log(INFO, "═══ Client Fit Metrics ═══")

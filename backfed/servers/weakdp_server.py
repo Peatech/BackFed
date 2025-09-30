@@ -51,11 +51,6 @@ class NormClippingServer(RobustAggregationServer):
             if weight_diff_norm > self.clipping_norm:
                 scaling_factor = self.clipping_norm / weight_diff_norm
                 for name, param in client_diff.items():
-                    if name.endswith('num_batches_tracked'):
-                        continue
-                    if 'tied' in name and 'decoder.weight' in name or '__' in name:
-                        continue
-                    
                     if 'weight' in name or 'bias' in name:
                         client_diff[name].mul_(scaling_factor)
 
@@ -70,10 +65,12 @@ class NormClippingServer(RobustAggregationServer):
         client_ids = []
         for client_id, num_examples, client_params in client_updates:
             diff_dict = {}
+            global_state_dict = dict(self.global_model.named_parameters())
             for name, param in client_params.items():
                 if name.endswith('num_batches_tracked'):
                     continue
-                diff_dict[name] = param.to(self.device) - self.global_model_params[name]
+                if name in global_state_dict:
+                    diff_dict[name] = param.to(self.device) - global_state_dict[name]
             client_diffs.append(diff_dict)
             client_weights.append(num_examples)
             client_ids.append(client_id)
@@ -83,11 +80,13 @@ class NormClippingServer(RobustAggregationServer):
         client_weights = client_weights / client_weights.sum()
 
         # Update global model with clipped weight differences
+        global_state_dict = dict(self.global_model.named_parameters())
         for i, client_diff in enumerate(client_diffs):
             for name, diff in client_diff.items():
                 if name.endswith('num_batches_tracked'):
                     continue
-                self.global_model_params[name].add_(diff * client_weights[i] * self.eta)
+                if name in global_state_dict:
+                    global_state_dict[name].data.add_(diff * client_weights[i] * self.eta)
 
         return True
 
@@ -122,15 +121,13 @@ class WeakDPServer(ClientSideDefenseServer, NormClippingServer):
     def aggregate_client_updates(self, client_updates: List[Tuple[client_id, num_examples, StateDict]]) -> StateDict:
         """Aggregate client updates with DP guarantees."""
         super().aggregate_client_updates(client_updates)
-        self.add_gaussian_noise_inplace(self.global_model_params)
+        
+        # Add Gaussian noise to global model parameters for differential privacy
+        for name, param in self.global_model.named_parameters():
+            noise = torch.normal(0, self.std_dev, param.shape, device=param.device)
+            param.data.add_(noise)
+        
         return True
-
-    def add_gaussian_noise_inplace(self, state_dict: StateDict) -> None:
-        """Add Gaussian noise to model parameters."""
-        for name, param in state_dict.items():
-            if 'weight' in name or 'bias' in name:
-                noise = torch.normal(0, self.std_dev, param.shape, device=param.device)
-                param.add_(noise)
 
     def __repr__(self) -> str:
         return f"WeakDP(strategy={self.strategy}, std_dev={self.std_dev}, clipping_norm={self.clipping_norm})"
