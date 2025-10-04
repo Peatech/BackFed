@@ -46,7 +46,7 @@ class BaseServer:
     defense_categories = ["base"]
     ignore_weights = ["num_batches_tracked"] # Ignore non-differentiable parameters during aggregation
     
-    def __init__(self, server_config, server_type = "base", **kwargs):
+    def __init__(self, server_config, server_type="base", verbose=True, **kwargs):
         """
         Initialize the server.
 
@@ -58,6 +58,7 @@ class BaseServer:
         self.server_type = server_type
         self.start_round = 1
         self.config = server_config
+        self.verbose = verbose
         
         # Normalization
         if self.config.dataset.upper() not in ["SENTIMENT140", "REDDIT"] and self.config.normalize:
@@ -528,7 +529,7 @@ class BaseServer:
         """Run the full FL experiment loop."""
         experiment_start_time = time.time()
 
-        if not self.config.disable_progress_bar:
+        if self.config.progress_bar:
             train_progress_bar = track(
                 range(self.start_round, self.start_round + self.config.num_rounds),
                 "[bold green]Training...",

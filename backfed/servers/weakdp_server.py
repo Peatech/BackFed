@@ -13,7 +13,7 @@ class NormClippingServer(RobustAggregationServer):
     """
     Server that clips the norm of client updates to defend against poisoning attacks.
     """
-    def __init__(self, server_config, server_type="norm_clipping", clipping_norm=5.0, eta=0.1, verbose=True):
+    def __init__(self, server_config, server_type="norm_clipping", clipping_norm=5.0, eta=0.1):
         """
         Args:
             server_type: Type of server.
@@ -23,7 +23,6 @@ class NormClippingServer(RobustAggregationServer):
         super(NormClippingServer, self).__init__(server_config, server_type)
         self.clipping_norm = clipping_norm
         self.eta = eta
-        self.verbose = verbose
         log(INFO, f"Initialized NormClipping server with clipping_norm={clipping_norm}, eta={eta}")
 
     def clip_updates_inplace(self, client_ids: List[client_id], client_diffs: List[StateDict]) -> None:

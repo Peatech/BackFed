@@ -17,10 +17,9 @@ class UnweightedFedAvgServer(BaseServer):
     where G^t: global model, m: num clients, L_i: client model
     """
 
-    def __init__(self, server_config, server_type = "unweighted_fedavg", eta=1.0, verbose=True, **kwargs):
+    def __init__(self, server_config, server_type = "unweighted_fedavg", eta=1.0, **kwargs):
         super(UnweightedFedAvgServer, self).__init__(server_config, server_type, **kwargs)
         self.eta = eta
-        self.verbose = verbose
         log(INFO, f"Initialized UnweightedFedAvg server with eta={eta}")
 
     def _compute_client_distance(self, client_state: StateDict) -> float:
@@ -91,10 +90,9 @@ class WeightedFedAvgServer(BaseServer):
     FedAvg server with client weights proportional to their number of samples.
     """
 
-    def __init__(self, server_config, server_type="weighted_fedavg", eta=1.0, verbose=True, **kwargs):
+    def __init__(self, server_config, server_type="weighted_fedavg", eta=1.0, **kwargs):
         super(WeightedFedAvgServer, self).__init__(server_config, server_type, **kwargs)
         self.eta = eta
-        self.verbose = verbose
         log(INFO, f"Initialized Weighted FedAvg server with eta={eta}")
 
     def _compute_client_distance(self, client_state: StateDict) -> float:

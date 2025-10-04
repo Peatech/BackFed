@@ -110,7 +110,7 @@ wandb:
 # *Visualization
 plot_data_distribution: False
 plot_client_selection: False
-disable_progress_bar: False
+progress_bar: True
 
 ########################################################
 # *Aggregator configuration
@@ -200,6 +200,8 @@ aggregator_config:
   flare:
     _target_: backfed.servers.FlareServer
     voting_threshold: 0.5
+    m: 10 # Number of auxiliary data samples
+    aux_class: 5 # The class used as auxiliary data
     eta: 0.1
 
   indicator:
