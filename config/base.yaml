@@ -13,8 +13,6 @@ no_attack: False
 
 # *Specify bengin client class and defense client class (if any)
 benign_clients: ??? # placeholder that is set during runtime after selecting malicious clients
-benign_client_class: backfed.clients.BenignClient
-defense_client_class: Null # Not Implemented yet
 
 # *Training mode
 training_mode: parallel # Choose from [parallel, sequential]
@@ -207,6 +205,11 @@ aggregator_config:
 
   indicator:
     _target_: backfed.servers.IndicatorServer
+
+  localdp:
+    _target_: backfed.servers.LocalDPServer
+    clipping_norm: 5
+    std_dev: 0.01
 
 ########################################################
 # *Optimizer configuration

@@ -113,6 +113,9 @@ class RobustLRServer(RobustAggregationServer):
         # Convert vector back to state dict
         idx = 0
         for name, param in self.global_model.named_parameters():
+            if any(pattern in name for pattern in self.ignore_weights):
+                continue
+            
             param_size = param.numel()
             param_shape = param.shape
 

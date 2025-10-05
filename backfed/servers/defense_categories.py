@@ -24,8 +24,8 @@ class ClientSideDefenseServer(UnweightedFedAvgServer):
     """
     defense_categories = ["client_side"]
 
-    def __init__(self, server_config, server_type, **kwargs):
-        super().__init__(server_config, server_type, **kwargs)
+    def __init__(self, server_config, server_type, eta, **kwargs):
+        super().__init__(server_config, server_type, eta, **kwargs)
 
 
 class RobustAggregationServer(UnweightedFedAvgServer):

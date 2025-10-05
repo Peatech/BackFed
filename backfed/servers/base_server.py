@@ -16,7 +16,6 @@ from ray.actor import ActorHandle
 from rich.progress import track
 from hydra.utils import instantiate
 from backfed.client_manager import ClientManager
-from backfed.clients import RedditMaliciousClient, SentimentMaliciousClient
 from backfed.datasets import FL_DataLoader, nonIID_Dataset, check_download
 from backfed.utils import (
     pool_size_from_resources,
@@ -31,7 +30,7 @@ from backfed.utils import (
     format_time_hms
 )
 from backfed.context_actor import ContextActor
-from backfed.clients import BenignClient, MaliciousClient
+from backfed.clients import BenignClient, MaliciousClient, LocalDPClient
 from backfed.client_app import ClientApp
 from backfed.poisons import Poison, IBA, A3FL
 from backfed.const import StateDict, Metrics, client_id, num_examples
@@ -131,8 +130,12 @@ class BaseServer:
         log(INFO, "Initializing client manager...")
         
         # Get benign_client_class from config
-        benign_client_class = get_class(config.benign_client_class)
-        log(INFO, f"Loaded benign client class: {config.benign_client_class}")
+        if self.server_type == "localdp":
+            benign_client_class = LocalDPClient
+        else:
+            benign_client_class = BenignClient
+        
+        log(INFO, f"Loaded benign client class: {benign_client_class.__name__}")
 
         # Get malicious_client_class from config
         if not self.config.no_attack:

@@ -10,7 +10,7 @@ from typing import Tuple, Dict, Any
 
 class LocalDPServer(ClientSideDefenseServer):
 
-    def __init__(self, server_config, server_type="localdp", std_dev=0.01, clipping_norm=1.0):
+    def __init__(self, server_config, server_type="localdp", eta=0.1, std_dev=0.01, clipping_norm=5.0):
         """
         Initialize the LocalDP server.
 
@@ -20,7 +20,8 @@ class LocalDPServer(ClientSideDefenseServer):
             std_dev: Standard deviation of Gaussian noise
             clipping_norm: Norm threshold of gradients at each epoch
         """
-        super(LocalDPServer, self).__init__(server_config, server_type)
+        super(LocalDPServer, self).__init__(server_config, server_type, eta)
+        self.clipping_norm = clipping_norm
         self.std_dev = std_dev
         log(INFO, f"Initialized LocalDPServer server with std_dev={std_dev} and clipping_norm={clipping_norm}")
 
@@ -31,7 +32,7 @@ class LocalDPServer(ClientSideDefenseServer):
         """
         init_args, train_package = super().train_package(client_type)
 
-        train_package["std_dev"] = self.std_dev
         train_package["clipping_norm"] = self.clipping_norm
+        train_package["std_dev"] = self.std_dev
 
         return init_args, train_package

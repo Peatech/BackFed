@@ -24,6 +24,7 @@ from backfed.servers.fltrust_server import FLTrustServer
 from backfed.servers.flare_server import FlareServer
 from backfed.servers.robustlr_server import RobustLRServer
 from backfed.servers.indicator_server import IndicatorServer
+from backfed.servers.localdp_server import LocalDPServer
 
 __all__ = [
     # Base classes
@@ -53,5 +54,6 @@ __all__ = [
     "FLTrustServer",
     "FlareServer",
     "RobustLRServer",
-    "IndicatorServer"
+    "IndicatorServer",
+    "LocalDPServer",
 ]

@@ -80,7 +80,7 @@ class FLTrustServer(RobustAggregationServer):
                 loss.backward()
                 self.server_optimizer.step()
         
-        return self._parameters_dict_to_vector(ref_model.state_dict())
+        return self._parameters_dict_to_vector(ref_model.state_dict()) - self._parameters_dict_to_vector(self.global_model.state_dict())
     
     def _parameters_dict_to_vector(self, net_dict: Dict) -> torch.Tensor:
         """Convert parameters dictionary to flat vector, excluding batch norm parameters."""
@@ -110,9 +110,10 @@ class FLTrustServer(RobustAggregationServer):
         total_score = 0
         sum_parameters = {}
 
+        global_vector = self._parameters_dict_to_vector(self.global_model.state_dict())
         for _, _, local_update in client_updates:
             # Convert local update to vector
-            local_vector = self._parameters_dict_to_vector(local_update)
+            local_vector = self._parameters_dict_to_vector(local_update) - global_vector
 
             # Calculate cosine similarity and trust score
             client_cos = F.cosine_similarity(central_update, local_vector, dim=0)

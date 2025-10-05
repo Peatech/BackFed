@@ -82,7 +82,7 @@ class NormClippingServer(RobustAggregationServer):
         global_state_dict = dict(self.global_model.named_parameters())
         for i, client_diff in enumerate(client_diffs):
             for name, diff in client_diff.items():
-                if name.endswith('num_batches_tracked'):
+                if any(pattern in name for pattern in self.ignore_weights):
                     continue
                 if name in global_state_dict:
                     global_state_dict[name].data.add_(diff * client_weights[i] * self.eta)

@@ -13,6 +13,7 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
 
 ## Updates
 + [05/09/2025]: Fix bugs for Flare and FLTrust defenses. 
++ [06/09/2025]: Add LocalDP client-side defense.
 
 ## Features
 

@@ -29,6 +29,7 @@ class LocalDPClient(BenignClient):
             client_type=client_type,
             **kwargs
         )
+        
     def train(self, train_package: Dict[str, Any]) -> Tuple[int, StateDict, Metrics]:
         """
         Train the model for a number of epochs.
