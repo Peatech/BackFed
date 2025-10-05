@@ -11,16 +11,27 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
 
 📄 **Paper**: [BackFed: An Efficient & Standardized Benchmark Suite for Backdoor Attacks in Federated Learning](https://arxiv.org/abs/2507.04903)
 
+## Updates
++ [05/09/2025]: Fix bugs for Flare and FLTrust defenses. 
+
 ## Features
 
-- **Modular Architecture**: Easily extend with new attacks, defenses, models, and datasets.
+- **Modular Architecture**: Each attack and defense belonges to a separate file, allowing for an easy extension with new attacks, defenses, models, and datasets.
 - **Parallel Execution**: Support for both sequential and parallel training modes using Ray with timeout mechanism for client training.
-- **Resource Tracking**: Client training and server aggregation are monitored based on memory usage and computation time.
 - **Comprehensive Attack & Defense Library**: Implementation of various attacks and defenses in a standardized setting for a reliable benchmark.
-- **Flexible Configuration**: Hydra-based configuration system for easy experiment setup.
-- **Supported Logging**: WandB for real-time visualization and CSV logging for experiment tracking.
-- **Resource Management**: Efficient GPU and CPU utilization with configurable resource allocation for parallel execution.
+- **Flexible Configuration**: Hydra-based configuration system for easy and extensible experiment setups.
+- **Real-time Logging**: Support real-time loggings via WandB or CSV.
+- **Resource Tracking**: Client training and server aggregation are monitored based on memory usage and computation time.
 
+## Supported Datasets and Models
+
+| **Dataset** | **Task** | **Models** | **Data Distribution** |
+| :-- | :-- | :-- | :-- |
+| CIFAR-10 | image classification | ResNet + VGG models | Dirichlet Non-IID (alpha=0.9) |
+| EMNIST (ByClass) | handwritten recognition | MnistNet + ResNet models | Dirichlet Non-IID (alpha=0.5) |
+| FEMNIST | handwritten recognition | MnistNet + ResNet models | Natural Non-IID (split by writers) |
+| Reddit | next-word-prediction | LSTM + Transformer | Natural Non-IID (split by authors) |
+| Sentiment140 | sentiment analysis | LSTM + Transformer + ALBERT | Natural Non-IID (split by tweets) |
 
 ## Project Structure
 

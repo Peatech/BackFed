@@ -195,6 +195,7 @@ aggregator_config:
 
   fltrust:
     _target_: backfed.servers.FLTrustServer
+    m: 100 # Number of server's root data samples
     eta: 0.1
 
   flare:

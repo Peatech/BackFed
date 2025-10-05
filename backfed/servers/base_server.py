@@ -261,7 +261,7 @@ class BaseServer:
 
         else: # Load from local path
             if not os.path.exists(self.config.checkpoint):
-                raise FileNotFoundError(f"Checkpoint not found at {self.config.checkpoint}")
+                raise FileNotFoundError(f"Checkpoint not found at {self.config.checkpoint}. Have you downloaded the checkpoints?")
             resume_model_dict = torch.load(self.config.checkpoint)
 
         # Update current round

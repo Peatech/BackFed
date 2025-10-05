@@ -6,7 +6,7 @@ import copy
 
 from torch.utils.data import DataLoader
 from typing import Dict, List, Tuple
-from logging import INFO, WARNING
+from logging import INFO
 from backfed.datasets import FL_DataLoader
 from backfed.servers.defense_categories import RobustAggregationServer
 from backfed.utils.logging_utils import log
@@ -45,7 +45,9 @@ class FlareServer(RobustAggregationServer):
         self.temperature = max(float(temperature), 1e-6)
         self.m = m
         self.aux_class = aux_class
+        
         super().__init__(server_config, server_type, eta) # Setup datasets and so on
+        
         log(
             INFO,
             "Initialized FLARE server with voting_threshold=%s, temperature=%s",
