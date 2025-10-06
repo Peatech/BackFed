@@ -28,8 +28,9 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
 
 | **Dataset** | **Task** | **Models** | **Data Distribution** |
 | :-- | :-- | :-- | :-- |
-| CIFAR-10 | image classification | ResNet + VGG models | Dirichlet Non-IID (alpha=0.9) |
-| EMNIST (ByClass) | handwritten recognition | MnistNet + ResNet models | Dirichlet Non-IID (alpha=0.5) |
+| CIFAR-10 | image classification | ResNet + VGG models | IID (Uniform) + Simulated Non-IID (Dirichlet) |
+| EMNIST (ByClass) | handwritten recognition | MnistNet + ResNet models | IID + Dirichlet Non-IID (Dirichlet) |
+| Tiny-Imagenet | image classification | Any Pytorch models | IID + Dirichlet Non-IID (Dirichlet) |
 | FEMNIST | handwritten recognition | MnistNet + ResNet models | Natural Non-IID (split by writers) |
 | Reddit | next-word-prediction | LSTM + Transformer | Natural Non-IID (split by authors) |
 | Sentiment140 | sentiment analysis | LSTM + Transformer + ALBERT | Natural Non-IID (split by tweets) |
@@ -324,3 +325,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
