@@ -10,6 +10,7 @@ import torchvision.transforms as transforms
 # Import the LSTM model
 from backfed.models.resnet_cifar import get_cifar_resnet_model
 from backfed.models.resnet_mnist import get_mnist_resnet_model
+from backfed.models.resnet_tinyimagenet import get_tinyimagenet_resnet_model
 from backfed.models.vgg_cifar import get_cifar_vgg_model
 from backfed.models import get_lstm_model, get_albert_model
 from backfed.utils.logging_utils import log
@@ -90,8 +91,14 @@ def _load_torchvision_model(model_name: str, num_classes: int, weights=None):
 def _build_tinyimagenet_model(model_name: str, num_classes: int, pretrain_model_path=None):
     if model_name == 'mnistnet':
         raise ValueError("MNISTNet is not supported for TINYIMAGENET dataset.")
+    if model_name.startswith('resnet') and pretrain_model_path is None:
+        try:
+            return get_tinyimagenet_resnet_model(model_name, num_classes)
+        except ValueError:
+            pass
     if pretrain_model_path is None:
-        return getattr(torchvision.models, model_name)(num_classes=num_classes)
+        constructor = getattr(torchvision.models, model_name)
+        return constructor(num_classes=num_classes)
     if pretrain_model_path in {"IMAGENET1K_V1", "IMAGENET1K_V2"}:
         log(INFO, f"Load pretrained model from {pretrain_model_path}")
         return _load_torchvision_model(model_name, num_classes, weights=pretrain_model_path)
@@ -163,9 +170,9 @@ def get_normalization(dataset_name: str):
     """Normalization is separated so that the trigger pattern can be normalized."""
     dataset = dataset_name.upper()
     if "NIST" in dataset:
-        return transforms.Normalize(mean=[0.5], std=[0.5])
+        return transforms.Normalize(mean=[0.5], std=[0.5])  # Common practice for MNIST, though mean=0.1307, std=0.3081 also used
     elif dataset in ["CIFAR10", "CIFAR100"]:
-        return transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.247, 0.243, 0.261])
+        return transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010])
     elif dataset == "TINYIMAGENET":
         return transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     else:

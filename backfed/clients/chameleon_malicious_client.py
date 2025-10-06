@@ -4,23 +4,22 @@ Chameleon client implementation for FL.
 
 import torch
 import torch.nn as nn
-import math
-import copy
 
 from torch.nn import functional as F
-from torchvision.models import VGG, ResNet
+from torchvision.models.vgg import VGG
+from torchvision.models.resnet import ResNet
 from backfed.clients.base_malicious_client import MaliciousClient
-from backfed.models import MnistNet
+from backfed.models import SupConModel, MnistNet
 from backfed.utils import log 
 from logging import INFO
 
 DEFAULT_PARAMS = {
     "poisoned_supcon_retrain_no_times": 10,
-    "poisoned_supcon_lr": 0.015,
+    "poisoned_supcon_lr": 0.005,
     "poisoned_supcon_momentum": 0.9,
     "poisoned_supcon_weight_decay": 0.0005,
-    "poisoned_supcon_milestones": [2, 4, 6, 8],
-    "poisoned_supcon_lr_gamma": 0.3,
+    "poisoned_supcon_milestones": [3, 5, 7, 9],
+    "poisoned_supcon_lr_gamma": 0.1,
     "fac_scale_weight": 6,
 }
 
@@ -77,19 +76,7 @@ class ChameleonClient(MaliciousClient):
             global_params_tensor = torch.cat([param.view(-1).detach().clone().requires_grad_(False) for name, param in train_package["global_model_params"].items()
                                   if "weight" in name or "bias" in name]).to(self.device)
         
-        self.contrastive_model = copy.deepcopy(self.model)
-        self.contrastive_model.train()
-
-        # Modify the model to be a SupConModel
-        if isinstance(self.contrastive_model, VGG):
-            self.contrastive_model.avgpool = nn.AvgPool2d(kernel_size=1, stride=1)
-            self.contrastive_model.classifier = nn.Identity()
-        elif isinstance(self.contrastive_model, ResNet):
-            self.contrastive_model.fc = nn.Identity()
-        elif isinstance(self.contrastive_model, MnistNet):
-            self.contrastive_model.fc2 = nn.Identity()
-        else:
-            raise ValueError("Chameleon only supports VGG, ResNet, and MnistNet models")
+        self.contrastive_model = SupConModel(self.model)
 
         self._loss_function()
         self._supcon_optimizer()
@@ -105,8 +92,7 @@ class ChameleonClient(MaliciousClient):
                 data = data.cuda().detach().requires_grad_(False)
                 targets = targets.cuda().detach().requires_grad_(False)
 
-                output = F.normalize(self.contrastive_model(data), dim=1)
-
+                output = self.contrastive_model(data)
                 contrastive_loss = self.supcon_loss(output, targets,
                                                     scale_weight=self.atk_config["fac_scale_weight"],
                                                     fac_label=self.atk_config["target_class"])
@@ -133,7 +119,7 @@ class ChameleonClient(MaliciousClient):
                 log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - Epoch {internal_round} | Contrastive loss: {contrastive_loss.item()} | Backdoor loss: {backdoor_loss} | Backdoor accuracy: {backdoor_accuracy}")
 
         # Transfer the trained weights of encoder to the local model and freeze the encoder
-        self._transfer_params(source_model=self.contrastive_model, target_model=self.model)
+        self.contrastive_model.transfer_params(target_model=self.model)
         for params in self.model.named_parameters():
             if "linear.weight" not in params[0] and "linear.bias" not in params[0]:
                 params[1].require_grad = False
@@ -161,13 +147,6 @@ class ChameleonClient(MaliciousClient):
                                                  milestones=self.atk_config['poisoned_supcon_milestones'],
                                                  gamma=self.atk_config['poisoned_supcon_lr_gamma'])
         return True  
-
-    def _transfer_params(self, source_model, target_model):
-        source_params = source_model.state_dict()
-        target_params = target_model.state_dict()
-        for name, param in source_params.items():
-            if name in target_params:
-                target_params[name].copy_(param.clone())
 
 class SupConLoss(nn.Module):
     """Supervised Contrastive Learning: 

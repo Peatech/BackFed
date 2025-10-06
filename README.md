@@ -29,9 +29,9 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
 | **Dataset** | **Task** | **Models** | **Data Distribution** |
 | :-- | :-- | :-- | :-- |
 | CIFAR-10 | image classification | ResNet + VGG models | IID (Uniform) + Simulated Non-IID (Dirichlet) |
-| EMNIST (ByClass) | handwritten recognition | MnistNet + ResNet models | IID + Dirichlet Non-IID (Dirichlet) |
-| Tiny-Imagenet | image classification | Any Pytorch models | IID + Dirichlet Non-IID (Dirichlet) |
-| FEMNIST | handwritten recognition | MnistNet + ResNet models | Natural Non-IID (split by writers) |
+| EMNIST (ByClass) | handwritten recognition | MnistNet + ResNet models | IID (Uniform) + Dirichlet Non-IID (Dirichlet) |
+| Tiny-Imagenet | image classification | Any Pytorch models | IID (Uniform) + Dirichlet Non-IID (Dirichlet) |
+| FEMNIST (Federated version of EMNIST) | handwritten recognition | MnistNet + ResNet models | Natural Non-IID (split by writers) |
 | Reddit | next-word-prediction | LSTM + Transformer | Natural Non-IID (split by authors) |
 | Sentiment140 | sentiment analysis | LSTM + Transformer + ALBERT | Natural Non-IID (split by tweets) |
 
@@ -194,6 +194,8 @@ The framework uses Hydra for configuration management. Below are the key configu
 | `federated_val_split` | float | `0.0` | Validation split for each client's dataset (should be > 0 if federated evaluation is True) |
 | `seed` | int | `123456` | Random seed for reproducibility |
 | `deterministic` | bool | `False` | Enable deterministic training (slower but fully reproducible) |
+
+Note: If you use debuggers (e.g., ipdb or pdb), it is recommended to set `training_mode=sequential` and `progress_bar=False`.
 
 ### Dataset and Model Configuration
 

@@ -22,7 +22,7 @@ follow_protocol: True # whether to follow training protocol from the server (e.g
 
 # *Dataset settings
 secret_dataset: False # Whether all malicious clients uses the same secret dataset for poisoning
-size_of_secret_dataset: 25 # Number of batches that malicious clients hold, if secret_dataset is True
+size_of_secret_dataset: 200 # Number of batches that malicious clients hold, if secret_dataset is True
 
 # *PGD settings
 poisoned_is_projection: False # PGD or not
@@ -55,7 +55,7 @@ source_class: 0 # For "one2one" attack, specify source class
 
 # *Poisoning period
 poison_start_round: 2001
-poison_end_round: 2300
+poison_end_round: 2200
 
 # *Poisoning frequency
 # 1. single-shot: All malicious clients poison the data in only round {poison_start_round} and then stop.

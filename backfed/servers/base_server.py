@@ -228,9 +228,9 @@ class BaseServer:
         if self.config.checkpoint == "wandb":
             # Fetch the model from W&B
             api = wandb.Api()
-            artifact = api.artifact(f"{self.config.wandb.entity}/{self.config.wandb.project}/{self.config.dataset}_{self.config.model}:latest")
+            artifact = api.artifact(f"{self.config.wandb.entity}/{self.config.wandb.project}/{self.config.dataset}_{self.config.model.lower()}:latest")
             local_path = artifact.download()
-            log(INFO, f"{self.config.model} checkpoint from W&B is downloaded to: {local_path}")
+            log(INFO, f"{self.config.model.lower()} checkpoint from W&B is downloaded to: {local_path}")
             resume_model_dict = torch.load(os.path.join(local_path, "model.pth"))
 
         elif isinstance(self.config.checkpoint, int): # Load from specific round
@@ -238,27 +238,27 @@ class BaseServer:
             eta = self.config.aggregator_config[self.config.aggregator]['eta']
             save_dir = os.path.join(os.getcwd(), "checkpoints", f"{self.config.dataset.upper()}_{self.config.aggregator}_{eta}")
             if self.config.partitioner == "uniform":
-                model_path = f"{self.config.model}_round_{self.config.checkpoint}_uniform.pth"
+                model_path = f"{self.config.model.lower()}_round_{self.config.checkpoint}_uniform.pth"
             else:
                 # Look for the model with the correct round_number and alpha. If correct alpha is not found, take the model with the highest alpha.
-                model_path = os.path.join(save_dir, f"{self.config.model}_round_{self.config.checkpoint}_dir_{self.config.alpha}.pth")
+                model_path = os.path.join(save_dir, f"{self.config.model.lower().lower()}_round_{self.config.checkpoint}_dir_{self.config.alpha}.pth")
                 if not os.path.exists(model_path):
-                    model_path_pattern = os.path.join(save_dir, f"{self.config.model}_round_{self.config.checkpoint}_dir_*.pth")
+                    model_path_pattern = os.path.join(save_dir, f"{self.config.model.lower()}_round_{self.config.checkpoint}_dir_*.pth")
                     model_paths = glob.glob(model_path_pattern)
                     if len(model_paths) == 0:
-                        raise FileNotFoundError(f"No checkpoint found for {self.config.model} at round {self.config.checkpoint} with any alpha in {save_dir}")
+                        raise FileNotFoundError(f"No checkpoint found for {self.config.model.lower()} at round {self.config.checkpoint} with any alpha in {save_dir}")
                     model_path = max(model_paths, key=lambda p: float(p.split('_')[-1].replace('.pth', '')))
                     highest_alpha = float(model_path.split('_')[-1].replace('.pth', ''))
                     log(WARNING, f"No checkpoint found for alpha {self.config.alpha} at round {self.config.checkpoint}. Loading model with highest alpha: {highest_alpha}")
 
             save_path = os.path.join(save_dir, model_path)
             if not os.path.exists(save_path):
-                raise FileNotFoundError(f"No checkpoint found for {self.config.model} at round {self.config.checkpoint} in {save_dir}")
+                raise FileNotFoundError(f"No checkpoint found for {self.config.model.lower()} at round {self.config.checkpoint} in {save_dir}")
 
             resume_model_dict = torch.load(save_path)
-            save_paths = glob.glob(os.path.join(save_dir, f"{self.config.model}_round_{self.config.checkpoint}*.pth"))
+            save_paths = glob.glob(os.path.join(save_dir, f"{self.config.model.lower()}_round_{self.config.checkpoint}*.pth"))
             if not save_paths:
-                raise FileNotFoundError(f"No checkpoint found for {self.config.model} at round {self.config.checkpoint} in {save_dir}")
+                raise FileNotFoundError(f"No checkpoint found for {self.config.model.lower()} at round {self.config.checkpoint} in {save_dir}")
             save_path = save_paths[0]  # Assuming we take the first match if multiple files are found
             resume_model_dict = torch.load(save_path)
 
@@ -276,9 +276,9 @@ class BaseServer:
     def _save_checkpoint(self, server_metrics):
         if self.config.save_checkpoint:
             if self.config.partitioner == "dirichlet":
-                model_filename = f"{self.config.model}_round_{self.current_round}_dir_{self.config.alpha}.pth"
+                model_filename = f"{self.config.model.lower()}_round_{self.current_round}_dir_{self.config.alpha}.pth"
             else:
-                model_filename = f"{self.config.model}_round_{self.current_round}_uniform.pth"
+                model_filename = f"{self.config.model.lower()}_round_{self.current_round}_uniform.pth"
 
             eta = self.config.aggregator_config[self.config.aggregator]['eta']
             save_dir = os.path.join(os.getcwd(), "checkpoints", f"{self.config.dataset.upper()}_{self.config.aggregator}_{eta}")
@@ -290,7 +290,7 @@ class BaseServer:
                 'metrics': self.best_metrics,
                 'model_state': self.best_model_state,
                 'server_round': self.current_round,
-                'model_name': self.config.model,
+                'model_name': self.config.model.lower(),
             }
             # Save the dictionary
             torch.save(save_dict, save_path)
@@ -613,7 +613,8 @@ class BaseServer:
             }
         elif issubclass(client_type, MaliciousClient):
             assert self.poison_module is not None, "Poison module is not initialized"
-            assert self.context_actor is not None, "Context actor is not initialized"
+            if self.config.training_mode == "parallel":
+                assert self.context_actor is not None, "Context actor is not initialized"
 
             model_poison_method = self.atk_config.model_poison_method
             model_poison_kwargs = {k:v for k,v in self.atk_config.model_poison_config[model_poison_method].items() if k != "_target_"}
