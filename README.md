@@ -14,6 +14,7 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
 ## Updates
 + [05/09/2025]: Fix bugs for Flare and FLTrust defenses. 
 + [06/09/2025]: Add LocalDP client-side defense.
++ [07/09/2025]: Add Anticipate Malicious client.
 
 ## Features
 
@@ -327,4 +328,5 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
 
