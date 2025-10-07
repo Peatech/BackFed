@@ -5,11 +5,8 @@ Chameleon client implementation for FL.
 import torch
 import torch.nn as nn
 
-from torch.nn import functional as F
-from torchvision.models.vgg import VGG
-from torchvision.models.resnet import ResNet
 from backfed.clients.base_malicious_client import MaliciousClient
-from backfed.models import SupConModel, MnistNet
+from backfed.models import SupConModel
 from backfed.utils import log 
 from logging import INFO
 

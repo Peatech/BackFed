@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Tuple, List, Optional
 from torch.utils.data import Subset, Dataset
 from omegaconf import DictConfig
-from backfed.utils import log
+from backfed.utils import log, set_random_seed
 from backfed.const import StateDict, Metrics
 from backfed.datasets import nonIID_Dataset
 from logging import INFO
@@ -44,6 +44,9 @@ class ClientApp:
             dataset_partition: List of indices for data partitioning.
             secret_dataset_indices: List of indices for malicious clients to do poison training (if any).
         """
+        # Set random seed
+        set_random_seed(seed=self.client_config.seed, deterministic=self.client_config.deterministic)
+        
         self.base_model = model  # Store pre-initialized model
         self.dataset = dataset
         self.dataset_partition = dataset_partition
@@ -95,6 +98,7 @@ class ClientApp:
 
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                torch.cuda.reset_peak_memory_stats()
 
             self.client = self._load_client(client_cls, client_id, **init_args)
 
@@ -122,7 +126,21 @@ class ClientApp:
 
         train_time_end = time.time()
         train_time = train_time_end - train_time_start
-        log(INFO, f"Client [{self.client.client_id}] ({self.client.client_type}) - Training time: {train_time:.2f}s | ClientApp RAM: {ram_usage:.2f}GB")
+        
+        if torch.cuda.is_available():
+            device_id = torch.cuda.current_device()
+            gpu_mem_allocated = torch.cuda.memory_allocated(device_id) / (1024 ** 3)
+            peak_mem_allocated = torch.cuda.max_memory_allocated(device_id) / (1024 ** 3)
+        else:
+            gpu_mem_allocated = 0.0
+            peak_mem_allocated = 0.0
+
+        log(
+            INFO, 
+            f"Client [{self.client.client_id}] ({self.client.client_type}) - "
+            f"Training time: {train_time:.2f}s | RAM: {ram_usage:.2f}GB | "
+            f"VRAM: {gpu_mem_allocated:.2f}GB | Peak VRAM: {peak_mem_allocated:.2f}GB"
+        )
 
         return results
 
@@ -184,7 +202,6 @@ class ClientApp:
         Returns:
             dict: Memory usage statistics.
         """
-
         process = psutil.Process(os.getpid())
         memory_info = process.memory_info()
 

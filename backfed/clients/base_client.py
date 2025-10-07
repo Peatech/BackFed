@@ -1,17 +1,12 @@
 """
 Base client implementation for FL.
 """
-
-import random
 import torch
 import torch.nn as nn
-import time
-import psutil
 
 from typing import Dict, Any, Tuple, List
 from torch.utils.data import DataLoader, Dataset, random_split
 from omegaconf import DictConfig
-from backfed.utils import set_random_seed
 from backfed.const import StateDict, Metrics
 from hydra.utils import instantiate
 
@@ -44,23 +39,11 @@ class BaseClient:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.verbose = verbose
 
-        # Set random seed
-        set_random_seed(seed=self.client_config.seed, deterministic=self.client_config.deterministic)
-
         # Set up model, dataloader, optimizer, criterion
         self.model = model.to(self.device)
         self._set_dataloader(dataset)
         self._set_optimizer()
         self._set_criterion()
-
-        # Resource metrics
-        self.training_time = 0.0
-        self.current_memory = 0.0
-        self.max_memory = 0.0
-
-        # Reset peak memory stats to track memory usage of this client
-        if torch.cuda.is_available():
-            torch.cuda.reset_peak_memory_stats()
 
     def _set_optimizer(self):
         """
@@ -139,27 +122,6 @@ class BaseClient:
         Get model parameters with consistent precision.
         """
         return {name: param.detach().clone() for name, param in self.model.state_dict().items()}
-
-    def get_resource_metrics(self):
-        """
-        Get resource usage metrics.
-        Returns:
-            Dictionary containing resource metrics
-        """
-        # Get current GPU memory usage if available
-
-        ram_usage = psutil.Process().memory_info().rss / (1024 ** 3)  # GB
-
-        if torch.cuda.is_available():
-            self.current_memory = torch.cuda.memory_allocated() / (1024 ** 3)  # GB
-            self.max_memory = torch.cuda.max_memory_allocated() / (1024 ** 3)  # GB
-
-        return {
-            "last_training_time": self.training_time,
-            "current_gpu_memory": self.current_memory,
-            "max_gpu_memory": self.max_memory,
-            "ram_usage": ram_usage,
-        }
 
     def get_client_info(self):
         """

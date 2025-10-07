@@ -3,7 +3,6 @@ Base benign client implementation for FL.
 """
 
 import torch
-import time
 
 from typing import Tuple, Dict, Any
 from backfed.const import StateDict, Metrics
@@ -78,8 +77,6 @@ class BenignClient(BaseClient):
             "global_model_params", "server_round"
         ])
 
-        start_time = time.time()
-
         # Setup training environment 
         self.model.load_state_dict(train_package["global_model_params"])
         server_round = train_package["server_round"]
@@ -125,7 +122,6 @@ class BenignClient(BaseClient):
 
         train_loss = epoch_loss
         train_acc = epoch_accuracy
-        self.training_time = time.time() - start_time
 
         # Log final results
         if self.verbose:
@@ -160,8 +156,6 @@ class BenignClient(BaseClient):
         # Setup training environment
         self.model.load_state_dict(train_package["global_model_params"])
         server_round = train_package["server_round"]
-        
-        start_time = time.time()
         
         # Training loop
         self.model.train()
@@ -219,20 +213,19 @@ class BenignClient(BaseClient):
             perplexity = torch.exp(torch.tensor(epoch_loss)).item()
         
         train_loss = epoch_loss
-        self.train_perplexity = perplexity
-        self.training_time = time.time() - start_time
+        train_perplexity = perplexity
         
         # Log final results
         if self.verbose:
             log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - "
                 f"Train Loss: {train_loss:.4f} | "
-                f"Train Perplexity: {self.train_perplexity:.4f}")
+                f"Train Perplexity: {train_perplexity:.4f}")
         
         state_dict = self.get_model_parameters()
         
         training_metrics = {
             "train_clean_loss": train_loss,
-            "train_perplexity": self.train_perplexity,
+            "train_perplexity": train_perplexity,
         }
         
         return len(self.train_dataset), state_dict, training_metrics
@@ -255,8 +248,6 @@ class BenignClient(BaseClient):
         # Setup training environment
         self.model.load_state_dict(train_package["global_model_params"])
         server_round = train_package["server_round"]
-
-        start_time = time.time()
 
         # Training loop
         self.model.train()
@@ -306,7 +297,6 @@ class BenignClient(BaseClient):
 
         train_loss = epoch_loss
         train_acc = epoch_accuracy
-        self.training_time = time.time() - start_time
 
         if self.verbose:
             log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - "

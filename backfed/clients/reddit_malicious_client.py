@@ -1,7 +1,6 @@
 """
 Text client implementation for FL.
 """
-import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -58,8 +57,6 @@ class RedditMaliciousClient(MaliciousClient):
         self._check_required_keys(train_package, required_keys=[
             "global_model_params", "selected_malicious_clients", "server_round"
         ])
-
-        start_time = time.time()
         
         # Setup training environment
         self.model.load_state_dict(train_package["global_model_params"])
@@ -210,13 +207,12 @@ class RedditMaliciousClient(MaliciousClient):
                 scheduler.step()
         
         train_loss = epoch_loss
-        self.train_perplexity = perplexity
-        self.training_time = time.time() - start_time
+        train_perplexity = perplexity
         
         # Log final results
         log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - "
             f"Train Backdoor Loss: {train_loss:.4f} | "
-            f"Train Perplexity: {self.train_perplexity:.4f}")
+            f"Train Perplexity: {train_perplexity:.4f}")
         
         # Prepare return values
         if self.atk_config["scale_weights"]:
@@ -229,7 +225,7 @@ class RedditMaliciousClient(MaliciousClient):
         
         training_metrics = {
             "train_backdoor_loss": train_loss,
-            "train_perplexity": self.train_perplexity,
+            "train_perplexity": train_perplexity,
         }
         
         return len(self.train_dataset), state_dict, training_metrics

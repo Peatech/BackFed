@@ -2,7 +2,6 @@
 FedProx client implementation.
 """
 import torch
-import time
 
 from logging import INFO
 from backfed.utils import log
@@ -45,8 +44,6 @@ class FedProxClient(BenignClient):
         self._check_required_keys(train_package, required_keys=[
             "global_model_params", "server_round", "proximal_mu"
         ])
-
-        start_time = time.time()
 
         # Setup training environment 
         self.model.load_state_dict(train_package["global_model_params"])
@@ -105,7 +102,6 @@ class FedProxClient(BenignClient):
 
         train_loss = epoch_loss
         train_acc = epoch_accuracy
-        self.training_time = time.time() - start_time
 
         # Log final results
         log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - "

@@ -2,7 +2,6 @@
 Base malicious client implementation for FL.
 """
 import random
-import time
 import torch
 import ray
 
@@ -72,8 +71,8 @@ class MaliciousClient(BaseClient):
             verbose=verbose,
         )
 
-        self.poison_module.set_client_id(self.client_id)
-        self.poison_module.set_device(self.device)
+        self.poison_module.set_client_id(self.client_id) # Some attacks (such as DBA) need client_id
+        self.poison_module.set_device(self.device) # Set device for poison module
 
     def _set_optimizer(self):
         if self.atk_config.use_atk_optimizer:
@@ -163,8 +162,6 @@ class MaliciousClient(BaseClient):
         self._check_required_keys(train_package, required_keys=[
             "global_model_params", "selected_malicious_clients", "server_round"
         ])
-
-        start_time = time.time()
 
         # Setup training environment
         self.model.load_state_dict(train_package["global_model_params"])
@@ -306,7 +303,6 @@ class MaliciousClient(BaseClient):
 
         train_loss = epoch_loss
         train_acc = epoch_accuracy
-        self.training_time = time.time() - start_time
 
         # Log final results
         log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - "

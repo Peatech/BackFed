@@ -3,7 +3,6 @@ Neurotoxin client implementation for FL.
 """
 
 import torch
-import time
 import numpy as np
 
 from backfed.clients.base_malicious_client import MaliciousClient
@@ -52,9 +51,6 @@ class NeurotoxinClient(MaliciousClient):
             **params_to_update
         )
 
-        # Cache for gradient masks to avoid recomputation
-        self._grad_mask_cache = {}
-
     def train(self, train_package):
         """Train the neurotoxin malicious client.
 
@@ -76,8 +72,6 @@ class NeurotoxinClient(MaliciousClient):
         self._check_required_keys(train_package, required_keys=[
             "global_model_params", "selected_malicious_clients", "server_round"
         ])
-
-        start_time = time.time()
 
         # Setup training environment
         self.model.load_state_dict(train_package["global_model_params"])
@@ -225,7 +219,6 @@ class NeurotoxinClient(MaliciousClient):
 
         train_loss = epoch_loss
         train_acc = epoch_accuracy
-        self.training_time = time.time() - start_time
 
         # Log final results
         log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - "
