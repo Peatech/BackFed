@@ -84,6 +84,7 @@ class FL_DataLoader:
             ])
         elif dataset_name == "TINYIMAGENET":
             self.train_transform = transforms.Compose([
+                transforms.RandomCrop(64, padding=8),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToImage(),
                 transforms.ToDtype(torch.float32, scale=True),

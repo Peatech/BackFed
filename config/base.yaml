@@ -41,7 +41,7 @@ federated_val_split: 0.0 # Validation split for each client's dataset (should be
 dataset: ??? # CIFAR10, CIFAR100, TinyImageNet, MNIST
 datapath: data
 partitioner: dirichlet # Choose from [uniform, dirichlet]
-alpha: 0.5 # Dirichlet distribution parameter
+alpha: 0.9 # Dirichlet distribution parameter
 normalize: True # Normalize the dataset
 
 # *Model configuration

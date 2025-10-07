@@ -92,10 +92,8 @@ def _build_tinyimagenet_model(model_name: str, num_classes: int, pretrain_model_
     if model_name == 'mnistnet':
         raise ValueError("MNISTNet is not supported for TINYIMAGENET dataset.")
     if model_name.startswith('resnet') and pretrain_model_path is None:
-        try:
-            return get_tinyimagenet_resnet_model(model_name, num_classes)
-        except ValueError:
-            pass
+        return get_tinyimagenet_resnet_model(model_name, num_classes)
+
     if pretrain_model_path is None:
         constructor = getattr(torchvision.models, model_name)
         return constructor(num_classes=num_classes)
