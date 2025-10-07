@@ -45,7 +45,7 @@ class ClientApp:
             secret_dataset_indices: List of indices for malicious clients to do poison training (if any).
         """
         # Set random seed
-        set_random_seed(seed=self.client_config.seed, deterministic=self.client_config.deterministic)
+        set_random_seed(seed=client_config.seed, deterministic=client_config.deterministic)
         
         self.base_model = model  # Store pre-initialized model
         self.dataset = dataset

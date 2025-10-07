@@ -18,6 +18,7 @@ class FedProxClient(BenignClient):
         model,
         client_config,
         client_type: str = "fedprox",
+        verbose: bool = True,
         **kwargs
     ):
         super().__init__(
@@ -26,6 +27,7 @@ class FedProxClient(BenignClient):
             model=model,
             client_config=client_config,
             client_type=client_type,
+            verbose=verbose,
             **kwargs
         )
     def train(self, train_package: Dict[str, Any]) -> Tuple[int, StateDict, Metrics]:

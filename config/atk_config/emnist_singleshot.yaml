@@ -127,9 +127,16 @@ model_poison_config:
 
   neurotoxin:
     _target_: backfed.clients.NeurotoxinClient
+    gradient_mask_ratio: 0.1
+    aggregate_all_layers: True
 
-  3dfed:
-    _target_: backfed.clients.3DFedClient
+  anticipate:
+    _target_: backfed.clients.AnticipateClient
+    anticipate_steps: 9
+    anticipate_lr: ${atk_config.poisoned_lr}
+    anticipate_gamma: 1
+    anticipate_momentum: 0.9
+    num_benign_users: 9
 
 ########################################################
 # *Attack optimizer configuration

@@ -3,15 +3,23 @@ Anticipate attack malicious client implementation for FL.
 Reference: https://github.com/YuxinWenRick/thinking-two-moves-ahead
 """
 import torch
-import torch.nn.functional as F
 import copy
+
 from torch.func import functional_call
 from logging import INFO, WARNING
-from typing import Dict, Optional, Tuple, Any
+from typing import Dict, Tuple, Any
 from backfed.clients.base_malicious_client import MaliciousClient
 from backfed.utils import log
 from backfed.const import Metrics, StateDict
 
+DEFAULT_PARAMS = {
+    "anticipate_steps": 9,  # Number of future steps to anticipate
+    "anticipate_lr": 0.1,  # Learning rate for anticipate optimizer
+    "anticipate_momentum": 0.9,  # Momentum for anticipate optimizer
+    "anticipate_gamma": 0.998,  # Learning rate decay for anticipate optimizer
+    "num_benign_users": 9,  # Estimated number of benign users
+}
+    
 class AnticipateClient(MaliciousClient):
     """
     Anticipate attack client that anticipates future aggregation steps.
@@ -20,14 +28,6 @@ class AnticipateClient(MaliciousClient):
     malicious updates that will be effective after aggregation with
     benign clients' updates.
     """
-    
-    DEFAULT_PARAMS = {
-        "anticipate_steps": 3,  # Number of future steps to anticipate
-        "anticipate_lr": 0.1,   # Learning rate for anticipate optimizer
-        "anticipate_momentum": 0.9,  # Momentum for anticipate optimizer
-        "num_benign_users": 9,  # Estimated number of benign users
-        "benign_lr": 0.01,      # Estimated learning rate of benign clients
-    }
     
     def __init__(
         self,
@@ -42,11 +42,9 @@ class AnticipateClient(MaliciousClient):
         verbose: bool = True,
         **kwargs
     ):
-        """Initialize the Anticipate malicious client."""
-        # Merge default params with config
-        for key, value in self.DEFAULT_PARAMS.items():
-            if key not in atk_config:
-                atk_config[key] = value
+        # Merge default parameters with provided params
+        params_to_update = DEFAULT_PARAMS.copy()
+        params_to_update.update(kwargs)
         
         super().__init__(
             client_id=client_id,
@@ -60,19 +58,19 @@ class AnticipateClient(MaliciousClient):
             verbose=verbose,
             **kwargs
         )
-        
-        self.anticipate_steps = self.atk_config.anticipate_steps
-        self.num_benign_users = self.atk_config.num_benign_users
-        self.benign_lr = self.atk_config.benign_lr
-        
-        log(INFO, f"Initialized Anticipate client with {self.anticipate_steps} anticipate steps")
     
+    def _set_optimizer(self):
+        """
+        We don't need to create optimizer for AnticipateClient.
+        """
+        pass
+            
     def _create_anticipate_optimizer(self, params, epoch=0):
         """Create optimizer for anticipate training."""
         return torch.optim.SGD(
             params,
-            lr=self.atk_config.anticipate_lr,
-            momentum=self.atk_config.anticipate_momentum
+            lr=self.atk_config['anticipate_lr'],
+            momentum=self.atk_config['anticipate_momentum']
         )
     
     def _train_with_functorch(
@@ -82,7 +80,6 @@ class AnticipateClient(MaliciousClient):
         buffers: Dict[str, torch.Tensor],
         train_loader,
         lr: float,
-        num_users: int = 1
     ) -> Dict[str, torch.Tensor]:
         """
         Simulate training using functorch for differentiation through optimization.
@@ -148,7 +145,6 @@ class AnticipateClient(MaliciousClient):
         curr_params: Dict[str, torch.Tensor],
         curr_buffers: Dict[str, torch.Tensor],
         train_loader,
-        num_users: int,
         server_round: int = 0
     ) -> Dict[str, torch.Tensor]:
         """
@@ -159,14 +155,13 @@ class AnticipateClient(MaliciousClient):
             curr_params: Current model parameters
             curr_buffers: Current model buffers
             train_loader: Training data loader
-            num_users: Number of benign users to simulate
             server_round: Current server round for learning rate decay
             
         Returns:
             Updated parameters after simulated benign updates
         """
         # Calculate learning rate with decay (gamma^round)
-        lr = self.benign_lr * (self.client_config.get("gamma", 1.0) ** server_round)
+        lr = self.client_config.lr * (self.atk_config['anticipate_gamma'] ** server_round)
         
         # Use functorch-based training simulation
         updated_params = self._train_with_functorch(
@@ -175,7 +170,6 @@ class AnticipateClient(MaliciousClient):
             buffers=curr_buffers,
             train_loader=train_loader,
             lr=lr,
-            num_users=num_users
         )
         
         return updated_params
@@ -245,6 +239,14 @@ class AnticipateClient(MaliciousClient):
             for name, buffer in attack_model.named_buffers()
         }
         
+        # Determine number of training epochs
+        if self.atk_config.poison_until_convergence:
+            num_epochs = 100  # Large number for convergence-based training
+            log(WARNING, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} "
+                "- Training until convergence of backdoor loss")
+        else:
+            num_epochs = self.atk_config.poison_epochs
+            
         # Create optimizer with parameter values
         opt_params = list(attack_params.values())
         optimizer = self._create_anticipate_optimizer(opt_params, epoch=server_round)
@@ -253,7 +255,7 @@ class AnticipateClient(MaliciousClient):
         num_batches = 0
         
         # Anticipatory training
-        for epoch in range(self.client_config["local_epochs"]):
+        for epoch in range(num_epochs):
             for batch_idx, batch in enumerate(self.train_loader):
                 # Get current model parameters and buffers
                 curr_params = {
@@ -271,15 +273,13 @@ class AnticipateClient(MaliciousClient):
                 targets = targets.to(self.device)
                 
                 # Apply poison to batch
-                poisoned_inputs, poisoned_targets = self.poison_module.inject_poison(
-                    inputs, targets, batch_idx=batch_idx
-                )
+                poisoned_inputs, poisoned_targets = self.poison_module.poison_batch(batch=(inputs, targets))
                 
                 optimizer.zero_grad()
                 loss = None
                 
                 # Multi-step anticipation
-                for anticipate_step in range(self.anticipate_steps):
+                for anticipate_step in range(self.atk_config['anticipate_steps']):
                     if anticipate_step == 0:
                         # Step 1: Estimate benign users' updates
                         benign_params = self._simulate_benign_update(
@@ -287,15 +287,14 @@ class AnticipateClient(MaliciousClient):
                             curr_params,
                             curr_buffers,
                             self.train_loader,
-                            self.num_benign_users - 1,
-                            server_round + anticipate_step
+                            server_round=server_round + anticipate_step
                         )
                         
                         # Step 2: Simulate aggregation with attack params
                         curr_params = self._aggregate_params(
                             attack_params,
                             benign_params,
-                            self.num_benign_users - 1
+                            self.atk_config['num_benign_users'] - 1
                         )
                     else:
                         # Subsequent steps: Simulate normal benign updates
@@ -304,8 +303,7 @@ class AnticipateClient(MaliciousClient):
                             curr_params,
                             curr_buffers,
                             self.train_loader,
-                            self.num_benign_users + 1,  # All users including attacker
-                            server_round + anticipate_step
+                            server_round=server_round + anticipate_step
                         )
                     
                     # Compute adversarial loss at this anticipation step
@@ -329,7 +327,7 @@ class AnticipateClient(MaliciousClient):
                 total_loss += loss.item()
                 num_batches += 1
                 
-                if self.verbose and batch_idx % 10 == 0:
+                if self.verbose and batch_idx % (len(self.train_loader) // 3) == 0:
                     log(INFO, f"Client [{self.client_id}] ({self.client_type}) - "
                              f"Round {server_round}, Epoch {epoch}, Batch {batch_idx}/{len(self.train_loader)}, "
                              f"Loss: {loss.item():.4f}")
@@ -340,15 +338,10 @@ class AnticipateClient(MaliciousClient):
                 param.copy_(attack_params[name])
             for name, buffer in attack_model.named_buffers():
                 buffer.copy_(attack_buffers[name])
-        
-        # Compute metrics
-        avg_loss = total_loss / max(num_batches, 1)
-        metrics = {
-            "train_loss": avg_loss,
-            "num_samples": len(self.train_dataset),
+                
+        train_loss = total_loss / max(num_batches, 1)
+        training_metrics = {
+            "train_backdoor_loss": train_loss,
         }
-        
-        log(INFO, f"Client [{self.client_id}] ({self.client_type}) - "
-                 f"Round {server_round} completed with avg loss: {avg_loss:.4f}")
-        
-        return self.client_id, attack_model.state_dict(), metrics
+
+        return len(self.train_dataset), attack_model.state_dict(), training_metrics

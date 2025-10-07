@@ -131,6 +131,9 @@ class CSVLogger():
             metrics (dict): Dictionary of metrics to log
             step (int, optional): Step number. If None, uses internal counter
         """
+        # Filter metrics to only include known fieldnames
+        metrics = {k: v for k, v in metrics.items() if k in self.fieldnames}
+        
         if step is not None and step != self.current_step and self.current_metrics:
             # If we're moving to a new step, write the accumulated metrics
             self._write_current_metrics()

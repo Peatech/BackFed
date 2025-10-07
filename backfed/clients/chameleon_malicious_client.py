@@ -35,6 +35,7 @@ class ChameleonClient(MaliciousClient):
         poison_module,
         context_actor,
         client_type: str = "chameleon_malicious",
+        verbose: bool = True,
         **kwargs
     ):
         # Merge default parameters with provided params
@@ -51,6 +52,7 @@ class ChameleonClient(MaliciousClient):
             poison_module=poison_module,
             context_actor=context_actor,
             client_type=client_type,
+            verbose=verbose,
             **params_to_update
         )
         

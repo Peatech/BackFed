@@ -18,6 +18,7 @@ class LocalDPClient(BenignClient):
         model,
         client_config,
         client_type: str = "localDP",
+        verbose: bool = True,
         **kwargs
     ):
         super().__init__(
@@ -26,6 +27,7 @@ class LocalDPClient(BenignClient):
             model=model,
             client_config=client_config,
             client_type=client_type,
+            verbose=verbose,
             **kwargs
         )
         

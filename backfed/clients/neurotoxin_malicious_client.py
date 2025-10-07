@@ -30,6 +30,7 @@ class NeurotoxinClient(MaliciousClient):
         poison_module,
         context_actor,
         client_type: str = "neurotoxin_malicious",
+        verbose: bool = True,
         **kwargs
     ):
         """
@@ -48,6 +49,7 @@ class NeurotoxinClient(MaliciousClient):
             poison_module=poison_module,
             context_actor=context_actor,
             client_type=client_type,
+            verbose=verbose,
             **params_to_update
         )
 

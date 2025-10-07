@@ -40,6 +40,7 @@ class BenignClient(BaseClient):
             model=model,
             client_config=client_config,
             client_type=client_type,
+            verbose=verbose,
             **kwargs
         )
 
