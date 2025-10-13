@@ -19,7 +19,7 @@ from backfed.client_manager import ClientManager
 from backfed.datasets import FL_DataLoader, nonIID_Dataset, check_download
 from backfed.utils import (
     pool_size_from_resources,
-    log, get_console,
+    log, get_console, log_metrics,
     get_model,
     get_normalization,
     init_wandb,
@@ -432,7 +432,7 @@ class BaseServer:
                 "test_perplexity": perplexity
             }
         else:
-            clean_loss, clean_accuracy = test_classifier(dataset=self.config.dataset, 
+            clean_total_samples, clean_loss, clean_accuracy = test_classifier(dataset=self.config.dataset, 
                                         model=model,
                                         test_loader=self.test_loader,
                                         device=self.device,
@@ -440,18 +440,20 @@ class BaseServer:
                                     )
 
             metrics = {
+                "test_clean_samples": clean_total_samples,
                 "test_clean_loss": clean_loss,
                 "test_clean_acc": clean_accuracy
             }
 
         if test_poisoned and self.poison_module is not None and (round_number is None or round_number > self.atk_config.poison_start_round - 1): # Evaluate the backdoor performance starting from the round before the poisoning starts
             self.poison_module.set_client_id(-1) # Set poison module to server
-            backdoor_loss, backdoor_accuracy= self.poison_module.poison_test(net=self.global_model,
+            backdoor_total_samples, backdoor_loss, backdoor_accuracy= self.poison_module.poison_test(net=self.global_model,
                                                             test_loader=self.test_loader,
                                                             loss_fn=torch.nn.CrossEntropyLoss(),
                                                             normalization=self.normalization
                                                         )
             metrics.update({
+                "test_backdoor_samples": backdoor_total_samples,
                 "test_backdoor_loss": backdoor_loss,
                 "test_backdoor_acc": backdoor_accuracy
             })
@@ -565,11 +567,12 @@ class BaseServer:
 
             # Centralized metrics
             log(INFO, "═══ Centralized Metrics ═══")
-            log(INFO, server_metrics)
+            log_metrics(server_metrics)
             log(INFO, "═══ Client Fit Metrics ═══")
-            log(INFO, client_fit_metrics)
-            log(INFO, "═══ Client Evaluation Metrics ═══")
-            log(INFO, client_evaluation_metrics)
+            log_metrics(client_fit_metrics)
+            if client_evaluation_metrics is not None:
+                log(INFO, "═══ Client Evaluation Metrics ═══")
+                log_metrics(client_evaluation_metrics)
 
             if self.config.save_logging in ["wandb", "both"]:
                 wandb.log({**server_metrics, "round": self.current_round})

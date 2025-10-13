@@ -132,7 +132,8 @@ class Poison(ABC):
             normalization (torch.utils.transforms.Normalize): The normalization
 
         Returns:
-            backdoor_loss (float): The loss of backdoor target samples
+            total_samples (int): The number of samples for backdoor evaluation
+            backdoor_loss (float): The loss of the backdoored samples
             backdoor_accuracy (float): The accuracy of targeted misclassification
         """
         net.eval()
@@ -151,7 +152,7 @@ class Poison(ABC):
 
         backdoor_accuracy = backdoored_preds / total_samples
         backdoor_loss = total_loss / len(test_loader)
-        return backdoor_loss, backdoor_accuracy
+        return total_samples, backdoor_loss, backdoor_accuracy
 
     def get_filter_mask(self, labels, mode):
         """Filter mask for samples in mask. Only the masked samples are triggered and evaluated in poison_test"""

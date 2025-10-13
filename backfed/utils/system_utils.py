@@ -67,6 +67,8 @@ def system_startup(config: DictConfig):
     # Set attack config
     if config.no_attack == False:
         set_attack_config(config)
+    
+    print("Output logged to", os.path.join(config.output_dir, "main.log"))
 
 def ray_init(num_gpus: int, num_cpus: int, namespace: str):
     # Calculate a reasonable object store memory limit (50% of system memory or 8GB, whichever is smaller)

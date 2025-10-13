@@ -78,6 +78,28 @@ def log_runtime(start_time, end_time, phase="Total"):
     logger.info(f"[Runtime] {phase}: {time_str}")
     return runtime
 
+def log_metrics(metrics):
+    msg = "\n"
+    for metric, value in metrics.items():
+        if "samples" in metric:
+            continue
+            
+        if "acc" in metric:
+            # Try to find the corresponding sample count
+            sample_key = metric.replace("_acc", "_samples")
+            sample_count = metrics.get(sample_key)
+            
+            if sample_count is not None and "train" not in metric:
+                correct_samples = round(sample_count * value)
+                msg += f"    {metric}: {value*100:.2f}% ({correct_samples}/{sample_count})\n"
+            else:
+                msg += f"    {metric}: {value*100:.2f}%\n"
+        else:
+            msg += f"    {metric}: {value:.4f}\n"
+
+    if msg:
+        log(INFO, msg)
+
 def get_console():
     """Get a properly configured console instance that works with Hydra's rich logging.
     

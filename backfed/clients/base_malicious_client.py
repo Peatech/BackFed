@@ -347,8 +347,9 @@ class MaliciousClient(BaseClient):
             "val_clean_acc": val_clean_accuracy,
         }
 
-        val_backdoor_loss, val_backdoor_accuracy = self.poison_module.poison_test(self.model, self.val_loader, normalization=self.normalization)
+        val_backdoor_samples, val_backdoor_loss, val_backdoor_accuracy = self.poison_module.poison_test(self.model, self.val_loader, normalization=self.normalization)
         metrics.update({
+            'val_backdoor_samples': val_backdoor_samples,
             'val_backdoor_loss': val_backdoor_loss,
             'val_backdoor_acc': val_backdoor_accuracy
         })
