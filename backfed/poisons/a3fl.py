@@ -22,7 +22,7 @@ DEFAULT_PARAMS = {
 
 class A3FL(Pattern):
     def __init__(self, params, client_id: int = -1, **kwargs):
-        super().__init__(params, client_id)
+        super().__init__(params, client_id, sync_poison=True) # Sync poison resources across clients in parallel mode
         
         # Merge default parameters with provided kwargs
         params_to_update = DEFAULT_PARAMS.copy()
@@ -37,7 +37,7 @@ class A3FL(Pattern):
         self.trigger_path = os.path.join("backfed/poisons/saved", "a3fl")
         os.makedirs(self.trigger_path, exist_ok=True)
 
-    def poison_warmup(self, client_id, server_round, initial_model, dataloader, normalization=None, **kwargs):
+    def poison_update(self, client_id, server_round, initial_model, dataloader, normalization=None, **kwargs):
         """Update the adversarial trigger"""
         self.search_trigger(client_id=client_id, 
                             server_round=server_round, 
@@ -177,6 +177,24 @@ class A3FL(Pattern):
     def unfreeze_model(self, model):
         for param in model.parameters():
             param.requires_grad = True
+            
+    def get_shared_resources(self) -> dict:
+        """
+        Get the resources to be shared across clients in parallel mode.
+        Returns:
+            resources (dict): The resources to be shared
+        """
+        return {
+            "trigger_image": self.trigger_image.detach().clone().cpu(),
+        }
+    
+    def update_shared_resources(self, resources: dict):
+        """
+        Update the resources shared across clients in parallel mode.
+        Args:
+            resources (dict): The resources to be updated
+        """
+        self.trigger_image = resources["trigger_image"].to(self.device)
 
     def poison_finish(self):
         # Delete the trigger folder of the last run

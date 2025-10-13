@@ -4,16 +4,22 @@ from omegaconf import DictConfig
 import torch
 
 class Poison(ABC):
-    def __init__(self, params: DictConfig, client_id: int = -1):
+    def __init__(self, params: DictConfig, client_id: int = -1, sync_poison=False):
         """
         Initialize the poison module.
 
         Args:
             params (DictConfig): Attack configuration
+            client_id: (int): Client ID
+            sync_poison (bool): Only used in parallel mode. whether to synchronize 
+            certain resources (e.g., trigger pattern, trigger generator, etc.) 
+            across clients. If True, the client will wait for the resource to 
+            be updated by other clients before using it.
         """
         self.params = params
         self.client_id = client_id
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.sync_poison = sync_poison
 
     def poison_batch(self, batch, mode="train"):
         poison_inputs, poison_labels = batch
@@ -31,7 +37,7 @@ class Poison(ABC):
         else:
             raise ValueError(f"Invalid mode: {mode}")
 
-    def poison_warmup(self, client_id, server_round, initial_model, dataloader, normalization=None, **kwargs):
+    def poison_update(self, client_id, server_round, initial_model, dataloader, normalization=None, **kwargs):
         """
         Not required for all attacks. Called at the start of the poisoning round to update resources (trigger pattern, trigger generator, etc.).
         Could be used for training the trigger pattern, attacker model, etc.
@@ -55,11 +61,26 @@ class Poison(ABC):
     def poison_inputs(self, inputs):
         """
         Return the poisoned inputs (inputs with the trigger applied).
-        'mode' argument is given if poison inputs during training and testing may be different. Otherwise, this should not matter.
         Args:
             inputs (torch.Tensor): Inputs to poison
         Return:
             poisoned_inputs (torch.Tensor): Poisoned inputs
+        """
+        pass
+    
+    def get_shared_resources(self) -> dict:
+        """
+        Get the resources to be shared across clients in parallel mode.
+        Returns:
+            resources (dict): The resources to be shared
+        """
+        pass
+    
+    def update_shared_resources(self, resources: dict):
+        """
+        Update the resources shared across clients in parallel mode.
+        Args:
+            resources (dict): The resources to be updated
         """
         pass
 

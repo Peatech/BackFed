@@ -177,7 +177,7 @@ class CSVLogger():
 
 def init_csv_logger(config, resume=False, detection=False):
     if config.partitioner.lower() == "dirichlet":
-        partitoner = f"dirichlet({config.alpha})"
+        partitoner = f"dirichlet_{config.alpha}"
     else:
         partitoner = "uniform"
 
@@ -186,26 +186,14 @@ def init_csv_logger(config, resume=False, detection=False):
     if config.no_attack:
         attack_name = "noattack"
     else:
-        attack_name = f"{config.atk_config.model_poison_method}({config.atk_config.data_poison_method})"
+        attack_name = f"{config.atk_config.model_poison_method}_{config.atk_config.data_poison_method}"
 
     name = f"{attack_name}_{aggregator.lower()}_{config.dataset.lower()}_{partitoner}_{config.atk_config.selection_scheme}_{config.atk_config.poison_frequency}"
     if config.name_tag:
         name = f"{name}_{config.name_tag}"
 
-    if config.dir_tag:
-        dir_path = os.path.join("csv_results", config.dir_tag)
-    else:
-        dir_path = "csv_results"
-
-    # Check if the run already exists and increment the version if it does
-    os.makedirs(dir_path, exist_ok=True)
-    count = 0
-    for csv_file in os.listdir(dir_path):
-        if name in csv_file:
-            count += 1
-    name = f"{name}_v{count}"
-
-    file_name = os.path.join(dir_path, f"{name}.csv")
+    file_name = os.path.join(config.output_dir, f"{name}.csv")
+    print(f"Logging results to {file_name}")
     
     if config.task == "next-word-prediction":
         field_names = ["round", "test_clean_loss", "test_perplexity", "test_backdoor_loss", "test_backdoor_acc", 

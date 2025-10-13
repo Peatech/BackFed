@@ -141,7 +141,7 @@ class BaseServer:
         if not self.config.no_attack:
             model_poison_method = config.atk_config.model_poison_config[config.atk_config.model_poison_method]
             malicious_client_class = get_class(model_poison_method._target_)
-            log(INFO, f"Loaded malicious client class: {model_poison_method._target_}")
+            log(INFO, f"Loaded malicious client class: {malicious_client_class.__name__}")
         else:
             malicious_client_class = None
             log(INFO, "No attack mode enabled, malicious client class set to None")
@@ -362,29 +362,6 @@ class BaseServer:
 
         return aggregated_metrics
 
-    def update_poison_module(self, round_number: int):
-        assert self.config.training_mode == "parallel", "Update poison module should only be called in parallel mode"
-        assert self.config.no_attack == False, "Update poison module should only be called when there is an attack"
-
-        self.poison_module.set_client_id(-1) # Set poison module to server
-
-        # In parallel mode, we need to ensure the poison module is updated with the latest resources
-        if (isinstance(self.poison_module, IBA) or isinstance(self.poison_module, A3FL)) \
-            and round_number in self.client_manager.get_poison_rounds():
-            try:
-                # Try to get the latest resources for this round
-                resource_package = ray.get(self.context_actor.wait_for_resource.remote(round_number=round_number))
-
-                # Update the poison module based on its type
-                if hasattr(self.poison_module, 'atk_model') and "iba_atk_model" in resource_package:
-                    self.poison_module.atk_model.load_state_dict(resource_package["iba_atk_model"])
-                elif hasattr(self.poison_module, 'trigger_image') and "a3fl_trigger" in resource_package:
-                    self.poison_module.trigger_image = resource_package["a3fl_trigger"].to(self.device)
-
-                log(INFO, f"Server updated poison module at round {round_number}")
-            except Exception as e:
-                log(WARNING, f"Failed to update poison module at round {round_number}: {e}")
-
     def fit_round(self, clients_mapping: Dict[Any, List[int]]) -> Metrics:
         """Perform one round of FL training.
 
@@ -504,9 +481,20 @@ class BaseServer:
 
         log(INFO, f"Server fit time: {time_fit:.2f} seconds")
 
-        # If mode is parallel, we need to update the poison module at the end of the round for server evaluation
-        if self.config.training_mode == "parallel" and self.config.no_attack == False:
-            self.update_poison_module(round_number=round_number)
+        # Update poison module with update_poison_module if:
+        # 1. training_mode is parallel, and
+        # 2. no_attack is False, and
+        # 3. current round is a poison round, and
+        # 4. poison_module.sync_poison is True (IBA, A3FL)
+        # Note: In sequential mode, poison_module is shared between server and clients, so no update is needed.
+        update_poison_module = (self.config.training_mode == "parallel" and \
+                                self.config.no_attack == False and \
+                                self.poison_module.sync_poison and \
+                                round_number in self.client_manager.get_poison_rounds() \
+                                )
+        if update_poison_module:
+            resource_package = ray.get(self.context_actor.wait_for_resource.remote(round_number=round_number))
+            self.poison_module.update_shared_resources(resource_package)
 
         client_eval_time_start = time.time()
         if self.config.federated_evaluation:

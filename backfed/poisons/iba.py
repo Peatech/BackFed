@@ -11,7 +11,9 @@ from backfed.utils import log
 from logging import INFO
 
 DEFAULT_PARAMS = {
-    "atk_eps": 0.06,
+    "atk_eps": 0.3,
+    "atk_test_eps": 0.05,  # Target epsilon after decay
+    "eps_decay_rate": 0.1,  # Decay rate per round
     "atk_lr": 0.01,
     "outter_epochs": 100,
     "save_atk_model_at_last": True,
@@ -19,7 +21,7 @@ DEFAULT_PARAMS = {
 
 class IBA(Poison):
     def __init__(self, params: DictConfig, client_id: int = -1, **kwargs):
-        super().__init__(params, client_id)
+        super().__init__(params, client_id, sync_poison=True) # Sync poison resources across clients in parallel mode
         
         # Merge default parameters with provided kwargs
         params_to_update = DEFAULT_PARAMS.copy()
@@ -39,14 +41,35 @@ class IBA(Poison):
 
         self.atk_model_path = os.path.join("backfed/poisons/saved", "iba")
         os.makedirs(self.atk_model_path, exist_ok=True)
+        
+        # Epsilon decay tracking
+        self.cur_eps = self.atk_eps  # Current epsilon
+        self.decay_start_round = None  # Track when decay starts
+    
+    def exponential_decay(self, init_val, decay_rate, t):
+        """Exponential decay: init_val * (1 - decay_rate)^t"""
+        return init_val * (1.0 - decay_rate) ** t
+    
+    def update_epsilon(self, server_round):
+        """Update current epsilon with decay"""
+        if self.decay_start_round is None:
+            self.decay_start_round = server_round
+        
+        t = server_round - self.decay_start_round
+        decayed_eps = self.exponential_decay(self.atk_eps, self.eps_decay_rate, t)
+        self.cur_eps = max(self.atk_test_eps, decayed_eps)
+        
+        log(INFO, f"Round {server_round}: cur_eps={self.cur_eps:.4f}")
 
     @torch.no_grad()
     def poison_inputs(self, inputs):
-        noise = self.atk_model(inputs) * self.atk_eps
+        noise = self.atk_model(inputs) * self.cur_eps
         return torch.clamp(inputs + noise, min=0, max=1)
     
-    def poison_warmup(self, client_id, server_round, initial_model, dataloader, normalization=None, **kwargs):
+    def poison_update(self, client_id, server_round, initial_model, dataloader, normalization=None, **kwargs):
         """Update the trigger generator model"""
+        # Update epsilon with decay
+        self.update_epsilon(server_round)
         self.train_atk_model(client_id=client_id, 
                              server_round=server_round, 
                              model=initial_model, 
@@ -82,7 +105,7 @@ class IBA(Poison):
                 atk_optimizer.zero_grad()
                 
                 # Generate poisoned inputs using the attack model
-                noise = self.atk_model(inputs) * self.atk_eps
+                noise = self.atk_model(inputs) * self.cur_eps
                 poisoned_inputs = torch.clamp(inputs + noise, min=0, max=1)
                 poisoned_labels = self.poison_labels(labels)
                 
@@ -135,6 +158,26 @@ class IBA(Poison):
     def unfreeze_model(self, model):
         for param in model.parameters():
             param.requires_grad = True
+            
+    def get_shared_resources(self) -> dict:
+        """
+        Get the resources to be shared across clients in parallel mode.
+        Returns:
+            resources (dict): The resources to be shared
+        """
+        return {
+            "atk_model_state_dict": {k: v.cpu() for k, v in self.atk_model.state_dict().items()},
+            "decay_start_round": self.decay_start_round
+        }
+    
+    def update_shared_resources(self, resources: dict):
+        """
+        Update the resources shared across clients in parallel mode.
+        Args:
+            resources (dict): The resources to be updated
+        """
+        self.atk_model.load_state_dict(resources["atk_model_state_dict"])
+        self.decay_start_round = resources["decay_start_round"]
 
     def poison_finish(self):
         if self.save_atk_model_at_last:

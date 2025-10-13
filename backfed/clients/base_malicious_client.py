@@ -100,12 +100,10 @@ class MaliciousClient(BaseClient):
         In parallel mode, each malicious client has its own instance of poison module, so the poison module needs to be synchronized.
         """
 
-        # Only IBA and A3FL requires resource synchronization
-        if type(self.poison_module) not in [IBA, A3FL]:
-            return
-
-        if self.client_id == selected_malicious_clients[0]:
-            self.poison_module.poison_warmup(
+        selected_client = selected_malicious_clients[0] # Use the first malicious client to update resources
+        
+        if self.client_id == selected_client:
+            self.poison_module.poison_update(
                 client_id=self.client_id,
                 initial_model=self.model,
                 dataloader=self.train_loader,
@@ -113,33 +111,29 @@ class MaliciousClient(BaseClient):
                 server_round=server_round,
                 normalization=normalization
             )
+            log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - Poison module updated")
 
-        # Update and synchronize the poison module in parallel mode
+        # In parallel mode, we need to synchronize the poison module via ContextActor
         if self.client_config.training_mode == "parallel":
-            if self.client_id == selected_malicious_clients[0]:
-                if isinstance(self.poison_module, IBA):
-                    resource_package = {
-                        "iba_atk_model": {
-                            k: v.cpu() if isinstance(v, torch.Tensor) else v 
-                            for k, v in self.poison_module.atk_model.state_dict().items()
-                        }
-                    }
-                elif isinstance(self.poison_module, A3FL):
-                    resource_package = {
-                        "a3fl_trigger": self.poison_module.trigger_image.detach().clone().cpu()
-                    }
-                
-                ray.get(self.context_actor.update_resource.remote(client_id=self.client_id, resource_package=resource_package, round_number=server_round))
-                log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - Updated poison module")
-            else:
-                log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - Waiting for poison module")
-                if isinstance(self.poison_module, IBA):
-                    resource_package = ray.get(self.context_actor.wait_for_resource.remote(round_number=server_round))
-                    self.poison_module.atk_model.load_state_dict(resource_package["iba_atk_model"])
-                elif isinstance(self.poison_module, A3FL):
-                    resource_package = ray.get(self.context_actor.wait_for_resource.remote(round_number=server_round))
-                    self.poison_module.trigger_image = resource_package["a3fl_trigger"].to(self.device)
-                log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - Poison module updated")
+            self.sync_poison_module(selected_client, server_round)
+            
+    def sync_poison_module(self, selected_client, server_round):
+        if self.client_id == selected_client:
+            resource_package = self.poison_module.get_shared_resources() # Get resources to be shared
+            
+            # Update resources in the context actor
+            ray.get(self.context_actor.update_resource.remote(client_id=self.client_id, 
+                                                            resource_package=resource_package, 
+                                                            round_number=server_round)
+                                                        )
+            log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - Posted resource to ContextActor")
+        else:
+            log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - Waiting for latest resources")
+            
+            # Wait for the resource to be updated by selected_client
+            resource_package = ray.get(self.context_actor.wait_for_resource.remote(round_number=server_round))
+            self.poison_module.update_shared_resources(resource_package) # Update the resource
+            log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - Resources synchronized")
 
     def train(self, train_package):
         """Train the neurotoxin malicious client.
@@ -173,7 +167,8 @@ class MaliciousClient(BaseClient):
         assert self.client_id in selected_malicious_clients, "Client is not selected for poisoning"
 
         # Initialize poison attack
-        self._update_and_sync_poison(selected_malicious_clients, server_round, normalization)
+        if self.poison_module.sync_poison: # If poison module requires synchronization
+            self._update_and_sync_poison(selected_malicious_clients, server_round, normalization)
 
         # Setup poisoned dataloader if poison_mode is offline
         if self.atk_config.poison_mode == "offline":

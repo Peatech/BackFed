@@ -235,7 +235,6 @@ client_optimizer_config:
 
 ########################################################
 # *Hydra configuration
-output_dir: outputs/${dir_tag}/${now:%Y-%m-%d-%H-%M-%S}
 hydra:
   job:
     chdir: False  # Prevent Hydra from changing working directory

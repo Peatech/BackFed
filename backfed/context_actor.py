@@ -23,7 +23,7 @@ class ContextActor:
 
     def update_resource(self, client_id: int, resource_package: Dict[str, Any], round_number: int):
         """
-        Update the resource and notify waiters. This should be called after poison_warmup when trigger pattern (IBA) or trigger generator (A3FL) is updated.
+        Update the resource and notify waiters. This should be called after poison_update when trigger pattern (IBA) or trigger generator (A3FL) is updated.
         Args:
             client_id (int): The ID of the client updating the resource.
             resource_package (dict): New package to update the resource.
