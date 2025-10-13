@@ -193,7 +193,7 @@ def init_csv_logger(config, resume=False, detection=False):
         name = f"{name}_{config.name_tag}"
 
     file_name = os.path.join(config.output_dir, f"{name}.csv")
-    print(f"Logging results to {file_name}")
+    print(f"Results logged to {file_name}")
     
     if config.task == "next-word-prediction":
         field_names = ["round", "test_clean_loss", "test_perplexity", "test_backdoor_loss", "test_backdoor_acc", 
