@@ -122,19 +122,20 @@ class SentimentMaliciousClient(MaliciousClient):
                     poisoned_labels = self.poison_module.poison_labels(labels)
 
                     # Compute losses for both clean and poisoned data in a single forward pass
-                    clean_output = self.model(**inputs)
+                    clean_output = self.model(**clean_inputs)
                     poisoned_output = self.model(**poisoned_inputs)
 
                     clean_loss = self.criterion(clean_output, clean_labels)
                     poisoned_loss = self.criterion(poisoned_output, poisoned_labels)
 
                     # Extract logits from transformer outputs if needed
-                    if isinstance(outputs, dict):
-                        outputs = outputs.logits if hasattr(outputs, 'logits') else outputs['logits']
+                    if isinstance(poisoned_output, dict):
+                        poisoned_output = poisoned_output.logits if hasattr(poisoned_output, 'logits') else poisoned_output['logits']
                         
                     # Combine losses according to attack alpha
                     loss = (self.atk_config.attack_alpha * poisoned_loss +
                            (1 - self.atk_config.attack_alpha) * clean_loss)
+                    outputs = poisoned_output  # For accuracy calculation, focus on poisoned output
 
                 elif self.atk_config.poison_mode in ["online", "offline"]:
                     if self.atk_config.poison_mode == "online":

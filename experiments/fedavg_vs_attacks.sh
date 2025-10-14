@@ -7,11 +7,11 @@
 python main.py -m -cn cifar10\
     aggregator=unweighted_fedavg \
     atk_config=cifar10_multishot \
-    atk_config.model_poison_method=base,neurotoxin,chameleon \
+    atk_config.model_poison_method=base,neurotoxin,anticipate,chameleon \
     atk_config.data_poison_method=pattern,distributed,edge_case,a3fl,iba \
     checkpoint=2000 \
     save_logging=csv \
-    num_rounds=600 \
+    num_rounds=1200 \
     num_gpus=0.5 \
     num_cpus=1 \
     dir_tag=cifar10_fed_avg_vs_attacks \
@@ -24,7 +24,7 @@ python main.py -m -cn emnist \
     model=mnistnet \
     checkpoint=1000 \
     atk_config=emnist_multishot \
-    atk_config.model_poison_method=base,neurotoxin,chameleon \
+    atk_config.model_poison_method=base,neurotoxin,anticipate,chameleon \
     atk_config.data_poison_method=pattern,distributed,edge_case,a3fl,iba \
     save_logging=csv \
     num_rounds=600 \
@@ -38,7 +38,7 @@ python main.py -m -cn emnist \
 python main.py -m -cn cifar10\
     aggregator=unweighted_fedavg \
     atk_config=cifar10_multishot \
-    atk_config.model_poison_method=base,neurotoxin,chameleon \
+    atk_config.model_poison_method=base,neurotoxin,anticipate,chameleon \
     atk_config.data_poison_method=pattern,distributed,edge_case,a3fl,iba \
     checkpoint=2000 \
     save_logging=csv \
@@ -46,4 +46,49 @@ python main.py -m -cn cifar10\
     num_gpus=0.5 \
     num_cpus=1 \
     dir_tag=cifar10_fed_avg_vs_attacks \
+    cuda_visible_devices=\"0,1,2,3,4\"
+
+
+python main.py -m -cn cifar10.yaml \
+    aggregator=unweighted_fedavg \
+    atk_config=cifar10_multishot \
+    atk_config.model_poison_method=base,neurotoxin,anticipate,chameleon \
+    atk_config.data_poison_method=pattern \
+    checkpoint=2000 \
+    save_logging=csv \
+    num_rounds=1200 \
+    num_gpus=0.5 \
+    num_cpus=1 \
+    dir_tag=cifar10_durability_enhanced \
+    cuda_visible_devices=\"0,1,2,3,4\"
+
+
+
+python main.py -cn cifar10.yaml \
+    aggregator=unweighted_fedavg \
+    atk_config=cifar10_multishot \
+    atk_config.model_poison_method=chameleon \
+    atk_config.data_poison_method=pattern \
+    checkpoint=2000 \
+    save_logging=csv \
+    num_rounds=1200 \
+    num_gpus=0.5 \
+    num_cpus=1 \
+    dir_tag=cifar10_durability_enhanced \
+    cuda_visible_devices=\"0,1,2,3,4\" \
+    training_mode=sequential
+
+
+
+python main.py -cn cifar10.yaml \
+    aggregator=unweighted_fedavg \
+    atk_config=cifar10_multishot \
+    atk_config.model_poison_method=base \
+    atk_config.data_poison_method=pattern \
+    checkpoint=2000 \
+    save_logging=csv \
+    num_rounds=1200 \
+    num_gpus=0.5 \
+    num_cpus=1 \
+    dir_tag=test_only \
     cuda_visible_devices=\"0,1,2,3,4\"

@@ -10,6 +10,7 @@ import os
 import gc
 import torch
 import torch.nn as nn
+import copy
 
 from backfed.clients import MaliciousClient
 from concurrent.futures import ThreadPoolExecutor
@@ -85,7 +86,7 @@ class ClientApp:
         return client_cls(
             client_id=client_id,
             dataset=dataset,
-            model=self.base_model,
+            model=copy.deepcopy(self.base_model),
             client_config=self.client_config,
             **init_args
         )

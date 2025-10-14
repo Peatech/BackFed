@@ -219,7 +219,7 @@ def init_csv_logger(config, resume=False, detection=False):
     
     if config.task == "next-word-prediction":
         field_names = ["round", "test_clean_loss", "test_perplexity", "test_backdoor_loss", "test_backdoor_acc", 
-                      "train_clean_loss", "train_perplexity", "train_backdoor_loss", "train_backdoor_acc"]
+                      "train_clean_loss", "train_perplexity", "train_backdoor_loss", "train_backdoor_perplexity"]
         if config.federated_evaluation:
             field_names.extend(["val_clean_loss", "val_perplexity", "val_backdoor_loss", "val_backdoor_acc"])
     else:

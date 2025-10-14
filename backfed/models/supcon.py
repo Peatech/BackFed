@@ -15,36 +15,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 import copy
 
-from torchvision.models.vgg import VGG
-from torchvision.models.resnet import ResNet 
-from backfed.models import VGG_CIFAR, ResNet_CIFAR, ResNet_MNIST, ResNet_TINYIMAGENET
+from backfed.models import VGG_CIFAR, ResNet_CIFAR, ResNet_MNIST, ResNet_TINYIMAGENET, MnistNet
 
 class SupConModel(nn.Module):
     def __init__(self, model):        
         super(SupConModel, self).__init__()
 
-        # Create feature extractor with trainable parameters
-        if isinstance(model, VGG):
-            # For ImageNet VGG: features + adaptive pooling
-            self.features = copy.deepcopy(model.features)
-            self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-            self.flatten = nn.Flatten()
-        elif isinstance(model, VGG_CIFAR):
+        if isinstance(model, VGG_CIFAR):
             # For CIFAR VGG: features
+            self.backbone_type = "VGG"
             self.features = copy.deepcopy(model.features) 
-            self.flatten = nn.Flatten()
-        elif isinstance(model, ResNet):
-            # For ImageNet ResNet: explicit layer construction
-            self.conv1 = copy.deepcopy(model.conv1)
-            self.bn1 = copy.deepcopy(model.bn1)
-            self.layer1 = copy.deepcopy(model.layer1)
-            self.layer2 = copy.deepcopy(model.layer2)
-            self.layer3 = copy.deepcopy(model.layer3)
-            self.layer4 = copy.deepcopy(model.layer4)
-            self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
             self.flatten = nn.Flatten()
         elif isinstance(model, (ResNet_CIFAR, ResNet_MNIST, ResNet_TINYIMAGENET)):
             # For CIFAR/MNIST ResNet: explicit layer construction with minimal pooling
+            self.backbone_type = "ResNet"
             self.conv1 = copy.deepcopy(model.conv1)
             self.bn1 = copy.deepcopy(model.bn1)
             self.layer1 = copy.deepcopy(model.layer1)
@@ -53,40 +37,24 @@ class SupConModel(nn.Module):
             self.layer4 = copy.deepcopy(model.layer4)
             self.avgpool = nn.AvgPool2d(kernel_size=1, stride=1)  # Preserve spatial info
             self.flatten = nn.Flatten()
+        elif isinstance(model, MnistNet):
+            # For MNISTNet: explicit layer construction
+            self.backbone_type = "MnistNet"
+            self.conv1 = copy.deepcopy(model.conv1)
+            self.conv2 = copy.deepcopy(model.conv2)
+            self.adaptive_pool = copy.deepcopy(model.adaptive_pool)
+            self.fc1 = copy.deepcopy(model.fc1)  # Feature extractor
+            self.flatten = nn.Flatten()
         else:
             raise ValueError("SupConModel currently only supports VGG and ResNet models")
 
-    def _get_feature_dim(self, dummy_input):
-        """Helper method to get feature dimension after feature extraction."""
-        if hasattr(self, 'features'):
-            # For VGG models
-            features = self.features(dummy_input)
-            if hasattr(self, 'avgpool'):
-                features = self.avgpool(features)
-            features = self.flatten(features)
-            return features.shape[1]
-        elif hasattr(self, 'conv1'):
-            # For ResNet models
-            out = F.relu(self.bn1(self.conv1(dummy_input)))
-            out = self.layer1(out)
-            out = self.layer2(out)
-            out = self.layer3(out)
-            out = self.layer4(out)
-            out = self.avgpool(out)
-            out = self.flatten(out)
-            return out.shape[1]
-        else:
-            raise ValueError("Unknown model architecture")
-
     def forward(self, x):
         # Extract features using the appropriate backbone
-        if hasattr(self, 'features'):
+        if self.backbone_type == "VGG":
             # VGG path
             x = self.features(x)
-            if hasattr(self, 'avgpool'):
-                x = self.avgpool(x)
             x = self.flatten(x)
-        elif hasattr(self, 'conv1'):
+        elif self.backbone_type == "ResNet":
             # ResNet path - explicit layer execution
             x = F.relu(self.bn1(self.conv1(x)))
             x = self.layer1(x)
@@ -95,6 +63,18 @@ class SupConModel(nn.Module):
             x = self.layer4(x)
             x = self.avgpool(x)
             x = self.flatten(x)
+        elif self.backbone_type == "MnistNet":
+            # MNISTNet path - explicit layer execution
+            if x.shape[1] == 3:  # Convert RGB to grayscale if needed
+                x = 0.299 * x[:, 0, :, :] + 0.587 * x[:, 1, :, :] + 0.114 * x[:, 2, :, :]
+                x = x.unsqueeze(1)  # Add channel dimension back
+            x = F.relu(self.conv1(x))
+            x = F.max_pool2d(x, 2, 2)
+            x = F.relu(self.conv2(x))
+            x = F.max_pool2d(x, 2, 2)
+            x = self.adaptive_pool(x)
+            x = self.flatten(x)
+            x = F.relu(self.fc1(x))
         else:
             raise ValueError("Unknown model architecture")
         
@@ -116,9 +96,7 @@ class SupConModel(nn.Module):
 
 
 def test_supcon_models():
-    """Test function for SupConModel with different architectures."""
-    import torchvision.models as models
-    
+    """Test function for SupConModel with different architectures."""    
     print("="*60)
     print("Testing SupConModel with different architectures")
     print("="*60)
@@ -222,57 +200,41 @@ def test_supcon_models():
 
     except Exception as e:
         print(f"   ResNet_TINYIMAGENET test failed: {e}")
-
-    # Test 5: Torchvision VGG (if available)
-    print("\n5. Testing Torchvision VGG:")
-    try:
-        vgg_imagenet = models.vgg11(pretrained=False)
-        supcon_vgg_imagenet = SupConModel(vgg_imagenet)
-        
-        # Test forward pass
-        x_imagenet = torch.randn(2, 3, 224, 224)
-        features_vgg_imagenet = supcon_vgg_imagenet(x_imagenet)
-        print(f"   Input shape: {x_imagenet.shape}")
-        print(f"   Output features shape: {features_vgg_imagenet.shape}")
-        print(f"   Features normalized: {torch.allclose(torch.norm(features_vgg_imagenet, dim=1), torch.ones(2))}")
-        
-        # Test parameter transfer
-        target_vgg_imagenet = models.vgg11(pretrained=False)
-        original_param = target_vgg_imagenet.features[0].weight.clone()
-        supcon_vgg_imagenet.transfer_params(target_vgg_imagenet)
-        transferred_param = target_vgg_imagenet.features[0].weight
-        print(f"   Parameter transfer successful: {not torch.equal(original_param, transferred_param)}")
-        
-    except Exception as e:
-        print(f"   Torchvision VGG test failed: {e}")
     
-    # Test 6: Torchvision ResNet (if available)
-    print("\n6. Testing Torchvision ResNet:")
+    # Test 5: MnistNet
+    print("\n5. Testing MnistNet:")
     try:
-        resnet_imagenet = models.resnet18(pretrained=False)
-        supcon_resnet_imagenet = SupConModel(resnet_imagenet)
+        from backfed.models.mnistnet import MnistNet
+        mnist_net = MnistNet(num_classes=10)
+        supcon_mnistnet = SupConModel(mnist_net)
         
-        # Test forward pass
-        x_imagenet = torch.randn(2, 3, 224, 224)
-        features_resnet_imagenet = supcon_resnet_imagenet(x_imagenet)
-        print(f"   Input shape: {x_imagenet.shape}")
-        print(f"   Output features shape: {features_resnet_imagenet.shape}")
-        print(f"   Features normalized: {torch.allclose(torch.norm(features_resnet_imagenet, dim=1), torch.ones(2))}")
+        # Test forward pass with grayscale input
+        x_mnist = torch.randn(2, 1, 28, 28)
+        features_mnist = supcon_mnistnet(x_mnist)
+        print(f"   Input shape (grayscale): {x_mnist.shape}")
+        print(f"   Output features shape: {features_mnist.shape}")
+        print(f"   Features normalized: {torch.allclose(torch.norm(features_mnist, dim=1), torch.ones(2))}")
+        
+        # Test forward pass with RGB input (should convert to grayscale)
+        x_rgb = torch.randn(2, 3, 28, 28)
+        features_rgb = supcon_mnistnet(x_rgb)
+        print(f"   Input shape (RGB): {x_rgb.shape}")
+        print(f"   Output features shape: {features_rgb.shape}")
+        print(f"   Features normalized (RGB): {torch.allclose(torch.norm(features_rgb, dim=1), torch.ones(2))}")
         
         # Test parameter transfer
-        target_resnet_imagenet = models.resnet18(pretrained=False)
-        original_param = target_resnet_imagenet.conv1.weight.clone()
-        supcon_resnet_imagenet.transfer_params(target_resnet_imagenet)
-        transferred_param = target_resnet_imagenet.conv1.weight
+        target_mnistnet = MnistNet(num_classes=10)
+        original_param = target_mnistnet.conv1.weight.clone()
+        supcon_mnistnet.transfer_params(target_mnistnet)
+        transferred_param = target_mnistnet.conv1.weight
         print(f"   Parameter transfer successful: {not torch.equal(original_param, transferred_param)}")
         
     except Exception as e:
-        print(f"   Torchvision ResNet test failed: {e}")
+        print(f"   MnistNet test failed: {e}")
     
     print("\n" + "="*60)
     print("All tests completed!")
     print("="*60)
-
 
 if __name__ == "__main__":        
     test_supcon_models()

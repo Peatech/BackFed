@@ -211,23 +211,40 @@ class AnticipateClient(MaliciousClient):
         Returns:
             Tuple of (client_id, model_update, metrics)
         """
-        self.model.train()
-        self.model.to(self.device)
-        
-        # Get global model parameters
-        global_params = train_package.get("global_params", None)
-        if global_params:
-            self.model.load_state_dict(global_params)
-        
-        server_round = train_package.get("server_round", 0)
-        
-        # Update poison module if needed
-        selected_malicious_clients = train_package.get("selected_malicious_clients", [self.client_id])
+        # Validate required keys
+        self._check_required_keys(train_package, required_keys=[
+            "global_model_params", "selected_malicious_clients", "server_round"
+        ])
+
+        # Setup training environment
+        self.model.load_state_dict(train_package["global_model_params"])
+        selected_malicious_clients = train_package["selected_malicious_clients"]
+        server_round = train_package["server_round"]
         normalization = train_package.get("normalization", None)
-        self._update_and_sync_poison(selected_malicious_clients, server_round, normalization)
+
+        # Verify client is selected for poisoning
+        assert self.client_id in selected_malicious_clients, "Client is not selected for poisoning"
+
+        # Initialize poison attack
+        if self.poison_module.sync_poison: # If poison module requires synchronization
+            self._update_and_sync_poison(selected_malicious_clients, server_round, normalization)
+
+        # Setup poisoned dataloader if poison_mode is offline
+        if self.atk_config.poison_mode == "offline":
+            self.set_poisoned_dataloader()
         
+        # Setup training protocol
+        proximal_mu = train_package.get('proximal_mu', None) if self.atk_config.follow_protocol else None
+        if self.atk_config.poisoned_is_projection or proximal_mu is not None:
+            global_params_tensor = torch.cat([param.view(-1).detach().clone().requires_grad_(False) for name, param in train_package["global_model_params"].items()
+                                  if "weight" in name or "bias" in name]).to(self.device)
+                
         # Create attack model
         attack_model = copy.deepcopy(self.model)
+        
+        # Set models to training mode
+        self.model.train()
+        attack_model.train()
         
         # Get parameters and buffers as dictionaries
         attack_params = {
@@ -251,12 +268,26 @@ class AnticipateClient(MaliciousClient):
         opt_params = list(attack_params.values())
         optimizer = self._create_anticipate_optimizer(opt_params, epoch=server_round)
         
-        total_loss = 0.0
-        num_batches = 0
-        
+        if self.atk_config["step_scheduler"]:
+            scheduler = torch.optim.lr_scheduler.StepLR(
+                optimizer,
+                step_size=self.atk_config["step_size"],
+                gamma=0.1
+            )
+                
         # Anticipatory training
-        for epoch in range(num_epochs):
-            for batch_idx, batch in enumerate(self.train_loader):
+        for internal_epoch in range(num_epochs):
+            running_loss = 0.0
+            epoch_correct = 0
+            epoch_total = 0
+
+            for batch_idx, (inputs, targets) in enumerate(self.train_loader):
+                if len(targets) <= 1:  # Skip small batches
+                    continue
+
+                # Zero gradients
+                optimizer.zero_grad()
+
                 # Get current model parameters and buffers
                 curr_params = {
                     name: param.clone().detach().requires_grad_(True)
@@ -267,16 +298,15 @@ class AnticipateClient(MaliciousClient):
                     for name, buffer in self.model.named_buffers()
                 }
                 
-                # Prepare poisoned batch
-                inputs, targets = batch
+                # Prepare batch
                 inputs = inputs.to(self.device)
                 targets = targets.to(self.device)
                 
                 # Apply poison to batch
                 poisoned_inputs, poisoned_targets = self.poison_module.poison_batch(batch=(inputs, targets))
                 
-                optimizer.zero_grad()
                 loss = None
+                final_logits = None
                 
                 # Multi-step anticipation
                 for anticipate_step in range(self.atk_config['anticipate_steps']):
@@ -319,18 +349,53 @@ class AnticipateClient(MaliciousClient):
                         loss = step_loss
                     else:
                         loss += step_loss
+                    
+                    # Store final logits for accuracy computation
+                    final_logits = logits
                 
-                # Backward pass and optimization
+                # Backward pass
                 loss.backward()
+
+                # Optimizer step
                 optimizer.step()
-                
-                total_loss += loss.item()
-                num_batches += 1
                 
                 if self.verbose and batch_idx % (len(self.train_loader) // 3) == 0:
                     log(INFO, f"Client [{self.client_id}] ({self.client_type}) - "
-                             f"Round {server_round}, Epoch {epoch}, Batch {batch_idx}/{len(self.train_loader)}, "
+                             f"Round {server_round}, Epoch {internal_epoch}, Batch {batch_idx}/{len(self.train_loader)}, "
                              f"Loss: {loss.item():.4f}")
+                
+                # Project poisoned model parameters
+                poison_projection = self.atk_config["poisoned_is_projection"] and (
+                    (batch_idx + 1) % self.atk_config["poisoned_projection_frequency"] == 0 or 
+                    (batch_idx == len(self.train_loader) - 1) 
+                )
+                if poison_projection:
+                    self._projection(global_params_tensor)
+
+                # Accumulate loss and accuracy (reuse final_logits from last anticipation step)
+                running_loss += loss.item() * len(targets)
+                epoch_correct += (final_logits.argmax(dim=1) == poisoned_targets).sum().item()
+                epoch_total += len(poisoned_inputs)
+
+            epoch_loss = running_loss / epoch_total
+            epoch_accuracy = epoch_correct / epoch_total
+
+            if self.verbose:
+                log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} "
+                    f"- Epoch {internal_epoch} | Train Loss: {epoch_loss:.4f} | "
+                    f"Train Accuracy: {epoch_accuracy:.4f}")
+
+            # Check convergence
+            if (self.atk_config["poison_until_convergence"] and
+                epoch_loss < self.atk_config["poison_convergence_threshold"]):
+                break
+
+            # Step scheduler if needed
+            if self.atk_config["step_scheduler"]:
+                scheduler.step()
+
+        train_loss = epoch_loss
+        train_acc = epoch_accuracy
         
         # Copy optimized parameters back to attack model
         with torch.no_grad():
@@ -338,10 +403,16 @@ class AnticipateClient(MaliciousClient):
                 param.copy_(attack_params[name])
             for name, buffer in attack_model.named_buffers():
                 buffer.copy_(attack_buffers[name])
+
+        # Log final results
+        log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - "
+            f"Train Backdoor Loss: {train_loss:.4f} | "
+            f"Train Backdoor Accuracy: {train_acc:.4f} | "
+        )
                 
-        train_loss = total_loss / max(num_batches, 1)
         training_metrics = {
             "train_backdoor_loss": train_loss,
+            "train_backdoor_acc": train_acc,
         }
 
         return len(self.train_dataset), attack_model.state_dict(), training_metrics

@@ -185,6 +185,14 @@ class RedditMaliciousClient(MaliciousClient):
                 # Optimizer step
                 self.optimizer.step()
                 
+                # Project poisoned model parameters
+                poison_projection = self.atk_config["poisoned_is_projection"] and (
+                    (batch_idx + 1) % self.atk_config["poisoned_projection_frequency"] == 0 or 
+                    (batch_idx == len(self.train_loader) - 1) 
+                )
+                if poison_projection:
+                    self._projection(global_params_tensor)
+
                 # Accumulate loss
                 running_loss += loss.item() * targets.numel()
                 epoch_total += targets.numel()
@@ -212,7 +220,7 @@ class RedditMaliciousClient(MaliciousClient):
         # Log final results
         log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - "
             f"Train Backdoor Loss: {train_loss:.4f} | "
-            f"Train Perplexity: {train_perplexity:.4f}")
+            f"Train Backdoor Perplexity: {train_perplexity:.4f}")
         
         # Prepare return values
         if self.atk_config["scale_weights"]:
@@ -225,7 +233,7 @@ class RedditMaliciousClient(MaliciousClient):
         
         training_metrics = {
             "train_backdoor_loss": train_loss,
-            "train_perplexity": train_perplexity,
+            "train_backdoor_perplexity": train_perplexity,
         }
         
         return len(self.train_dataset), state_dict, training_metrics

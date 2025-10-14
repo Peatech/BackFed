@@ -174,11 +174,8 @@ class MaliciousClient(BaseClient):
         if self.atk_config.poison_mode == "offline":
             self.set_poisoned_dataloader()
 
-        # Setup training protocol
-        proximal_mu = train_package.get('proximal_mu', None) if self.atk_config.follow_protocol else None
-
         # Initialize training tools
-
+        proximal_mu = train_package.get('proximal_mu', None) if self.atk_config.follow_protocol else None
         if self.atk_config.poisoned_is_projection or proximal_mu is not None:
             global_params_tensor = torch.cat([param.view(-1).detach().clone().requires_grad_(False) for name, param in train_package["global_model_params"].items()
                                   if "weight" in name or "bias" in name]).to(self.device)
@@ -191,7 +188,7 @@ class MaliciousClient(BaseClient):
             )
 
         # Determine number of training epochs
-        if self.atk_config.poison_until_convergence:
+        if self.atk_config["poison_until_convergence"]:
             num_epochs = 100  # Large number for convergence-based training
             log(WARNING, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} "
                 "- Training until convergence of backdoor loss")
@@ -217,7 +214,7 @@ class MaliciousClient(BaseClient):
                 labels = labels.to(self.device)
 
                 # Forward pass and loss computation
-                if self.atk_config.poison_mode == "multi_task":
+                if self.atk_config.poison_mode == "multi_task": # IBA style
                     # Handle multi-task poisoning
                     clean_images = images.detach().clone()
                     clean_labels = labels.detach().clone()
@@ -239,6 +236,7 @@ class MaliciousClient(BaseClient):
                     # Combine losses according to attack alpha
                     loss = (self.atk_config.attack_alpha * poisoned_loss +
                            (1 - self.atk_config.attack_alpha) * clean_loss)
+                    outputs = poisoned_output  # For accuracy calculation, focus on poisoned output
 
                 elif self.atk_config.poison_mode in ["online", "offline"]:
                     if self.atk_config.poison_mode == "online":
@@ -270,11 +268,14 @@ class MaliciousClient(BaseClient):
                 self.optimizer.step()
 
                 # Project poisoned model parameters
-                if self.atk_config.poisoned_is_projection and \
-                    ( (batch_idx + 1) % self.atk_config.poisoned_projection_frequency == 0 or
-                     (batch_idx == len(self.train_loader) - 1) ):
+                poison_projection = self.atk_config["poisoned_is_projection"] and (
+                    (batch_idx + 1) % self.atk_config["poisoned_projection_frequency"] == 0 or 
+                    (batch_idx == len(self.train_loader) - 1) 
+                )
+                if poison_projection:
                     self._projection(global_params_tensor)
 
+                # Accumulate loss and accuracy
                 running_loss += loss.item() * len(labels)
                 epoch_correct += (outputs.argmax(dim=1) == labels).sum().item()
                 epoch_total += len(images)
@@ -301,8 +302,8 @@ class MaliciousClient(BaseClient):
 
         # Log final results
         log(INFO, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - "
-            f"Train Loss: {train_loss:.4f} | "
-            f"Train Accuracy: {train_acc:.4f} | "
+            f"Train Backdoor Loss: {train_loss:.4f} | "
+            f"Train Backdoor Accuracy: {train_acc:.4f} | "
         )
 
         # Prepare return values

@@ -91,17 +91,16 @@ class NeurotoxinClient(MaliciousClient):
         mask_grad_list = self._compute_grad_mask(
             self.model,
             self.train_loader,
-            ratio=self.atk_config.gradient_mask_ratio
+            ratio=self.atk_config["gradient_mask_ratio"]
         )
 
         # Setup poisoned dataloader if poison_mode is offline
-        if self.atk_config.poison_mode == "offline":
+        if self.atk_config["poison_mode"] == "offline":
             super().set_poisoned_dataloader()
 
         # Setup training protocol
-        proximal_mu = self.atk_config.get('proximal_mu', None) if self.atk_config.follow_protocol else None
-
-        if self.atk_config.poisoned_is_projection or proximal_mu is not None:
+        proximal_mu = self.atk_config.get('proximal_mu', None) if self.atk_config["follow_protocol"] else None
+        if self.atk_config["poisoned_is_projection"] or proximal_mu is not None:
             global_params_tensor = torch.cat([param.view(-1).detach().clone().requires_grad_(False) for name, param in train_package["global_model_params"].items()
                                   if "weight" in name or "bias" in name]).to(self.device)
 
@@ -113,12 +112,12 @@ class NeurotoxinClient(MaliciousClient):
             )
 
         # Determine number of training epochs
-        if self.atk_config.poison_until_convergence:
+        if self.atk_config["poison_until_convergence"]:
             num_epochs = 100  # Large number for convergence-based training
             log(WARNING, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} "
                 "- Training until convergence of backdoor loss")
         else:
-            num_epochs = self.atk_config.poison_epochs
+            num_epochs = self.atk_config["poison_epochs"]
 
         # Training loop
         self.model.train()
@@ -139,7 +138,7 @@ class NeurotoxinClient(MaliciousClient):
                 labels = labels.to(self.device)
 
                 # Forward pass and loss computation
-                if self.atk_config.poison_mode == "multi_task":
+                if self.atk_config["poison_mode"] == "multi_task":  # IBA style
                     # Handle multi-task poisoning
                     clean_images = images.clone()
                     clean_labels = labels.clone()
@@ -159,11 +158,12 @@ class NeurotoxinClient(MaliciousClient):
                     poisoned_loss = self.criterion(poisoned_output, poisoned_labels)
 
                     # Combine losses according to attack alpha
-                    loss = (self.atk_config.attack_alpha * poisoned_loss +
-                           (1 - self.atk_config.attack_alpha) * clean_loss)
+                    loss = (self.atk_config["attack_alpha"] * poisoned_loss +
+                           (1 - self.atk_config["attack_alpha"]) * clean_loss)
+                    outputs = poisoned_output  # For accuracy calculation, focus on poisoned output
 
-                elif self.atk_config.poison_mode in ["online", "offline"]:
-                    if self.atk_config.poison_mode == "online":
+                elif self.atk_config["poison_mode"] in ["online", "offline"]:
+                    if self.atk_config["poison_mode"] == "online":
                         images, labels = self.poison_module.poison_batch(batch=(images, labels))
 
                     # Normalize images if needed
@@ -176,7 +176,7 @@ class NeurotoxinClient(MaliciousClient):
 
                 else:
                     raise ValueError(
-                        f"Invalid poison_mode: {self.atk_config.poison_mode}. "
+                        f"Invalid poison_mode: {self.atk_config['poison_mode']}. "
                         f"Expected one of: ['multi_task', 'online', 'offline']"
                     )
 
@@ -187,16 +187,18 @@ class NeurotoxinClient(MaliciousClient):
 
                 # Backward pass with gradient masking
                 loss.backward()
-                self._apply_grad_mask(mask_grad_list)
+                self._apply_grad_mask(self.model, mask_grad_list)
 
                 # Optimizer step
                 self.optimizer.step()
-
+                
                 # Project poisoned model parameters
-                if self.atk_config.poisoned_is_projection and \
-                    ( (batch_idx + 1) % self.atk_config.poisoned_projection_frequency == 0 or (batch_idx == len(self.train_loader) - 1) ):
-                        # log(INFO, f"Client [{self.client_id}]: Projecting poisoned model parameters")
-                        self._projection(global_params_tensor)
+                poison_projection = self.atk_config["poisoned_is_projection"] and (
+                    (batch_idx + 1) % self.atk_config["poisoned_projection_frequency"] == 0 or 
+                    (batch_idx == len(self.train_loader) - 1) 
+                )
+                if poison_projection:
+                    self._projection(global_params_tensor)
 
                 running_loss += loss.item() * len(labels)
                 epoch_correct += (outputs.argmax(dim=1) == labels).sum().item()
@@ -257,7 +259,7 @@ class NeurotoxinClient(MaliciousClient):
             loss.backward(retain_graph=True)
 
         mask_grad_list = []
-        if self.atk_config.aggregate_all_layers:
+        if self.atk_config["aggregate_all_layers"]:
             grad_list = []
             grad_abs_sum_list = []
             k_layer = 0
@@ -323,10 +325,8 @@ class NeurotoxinClient(MaliciousClient):
 
     ### Neurotoxin gradient masking function
     @torch.no_grad()
-    def _apply_grad_mask(self, mask_grad_list: List[torch.Tensor]):
-        """Optimized gradient mask application"""
-        for (param, mask) in zip(
-            (p for p in self.model.parameters() if p.requires_grad),
-            mask_grad_list
-        ):
-            param.grad.mul_(mask)
+    def _apply_grad_mask(self, model, mask_grad_list):
+        mask_grad_list_copy = iter(mask_grad_list)
+        for name, parms in model.named_parameters():
+            if parms.requires_grad:
+                parms.grad = parms.grad * next(mask_grad_list_copy)

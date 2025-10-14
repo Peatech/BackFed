@@ -126,7 +126,7 @@ model_poison_config:
 
   neurotoxin:
     _target_: backfed.clients.NeurotoxinClient
-    gradient_mask_ratio: 0.1  
+    gradient_mask_ratio: 0.99
     aggregate_all_layers: True
   
   anticipate:
