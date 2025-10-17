@@ -21,7 +21,32 @@ DEFAULT_TRANSFORMS = {
         transforms.ToDtype(torch.float32, scale=True),
         transforms.Resize((28, 28))
     ]),
+    "EMNIST_BYCLASS": transforms.Compose([
+        transforms.ToImage(), 
+        transforms.ToDtype(torch.float32, scale=True),
+        transforms.Resize((28, 28))
+    ]),
+    "EMNIST_BALANCED": transforms.Compose([
+        transforms.ToImage(), 
+        transforms.ToDtype(torch.float32, scale=True),
+        transforms.Resize((28, 28))
+    ]),
+    "EMNIST_DIGITS": transforms.Compose([
+        transforms.ToImage(), 
+        transforms.ToDtype(torch.float32, scale=True),
+        transforms.Resize((28, 28))
+    ]),
+    "FEMNIST": transforms.Compose([
+        transforms.ToImage(), 
+        transforms.ToDtype(torch.float32, scale=True),
+        transforms.Resize((28, 28))
+    ]),
     "CIFAR10": transforms.Compose([
+        transforms.ToImage(), 
+        transforms.ToDtype(torch.float32, scale=True),
+        transforms.Resize((32, 32))
+    ]),
+    "CIFAR100": transforms.Compose([
         transforms.ToImage(), 
         transforms.ToDtype(torch.float32, scale=True),
         transforms.Resize((32, 32))
@@ -35,8 +60,13 @@ DEFAULT_TRANSFORMS = {
 
 # Default trigger patterns
 DEFAULT_TRIGGERS = {
-    "MNIST": torch.ones((1, 4, 4)), 
-    "CIFAR10": torch.ones((3, 5, 5)), 
+    "MNIST": torch.ones((1, 4, 4)),
+    "EMNIST_BYCLASS": torch.ones((1, 4, 4)),
+    "EMNIST_BALANCED": torch.ones((1, 4, 4)),
+    "EMNIST_DIGITS": torch.ones((1, 4, 4)),
+    "FEMNIST": torch.ones((1, 4, 4)),  
+    "CIFAR10": torch.ones((3, 5, 5)),
+    "CIFAR100": torch.ones((3, 5, 5)),
     "TINYIMAGENET": torch.ones((3, 10, 10))
 }
 
@@ -48,7 +78,38 @@ BADNETS_TRIGGER_WEIGHTS = {
         [0.0, 1.0, 1.0, 0.0],
         [1.0, 0.0, 0.0, 1.0],
     ]),
+    "EMNIST_BYCLASS": torch.tensor([
+        [0.0, 0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 1.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0, 1.0],
+    ]),
+    "EMNIST_BALANCED": torch.tensor([
+        [0.0, 0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 1.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0, 1.0],
+    ]),
+    "EMNIST_DIGITS": torch.tensor([
+        [0.0, 0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 1.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0, 1.0],
+    ]),
+    "FEMNIST": torch.tensor([
+        [0.0, 0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 1.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0, 1.0],
+    ]),
     "CIFAR10": torch.tensor([
+        [0.0, 0.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0, 1.0],
+    ]),
+    "CIFAR100": torch.tensor([
         [0.0, 0.0, 0.0, 0.0, 0.0],
         [0.0, 0.0, 0.0, 1.0, 0.0],
         [0.0, 0.0, 1.0, 0.0, 0.0],
@@ -68,17 +129,6 @@ BADNETS_TRIGGER_WEIGHTS = {
         [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
     ])
 }
-
-# Add NIST variants to use MNIST patterns
-for dataset in ["FEMNIST", "EMNIST_BYCLASS", "EMNIST_BALANCED", "EMNIST_DIGITS"]:
-    BADNETS_TRIGGER_WEIGHTS[dataset] = BADNETS_TRIGGER_WEIGHTS["MNIST"]
-    DEFAULT_TRIGGERS[dataset] = DEFAULT_TRIGGERS["MNIST"]
-    DEFAULT_TRANSFORMS[dataset] = DEFAULT_TRANSFORMS["MNIST"]
-
-# Add CIFAR100 to use CIFAR10 patterns
-BADNETS_TRIGGER_WEIGHTS["CIFAR100"] = BADNETS_TRIGGER_WEIGHTS["CIFAR10"]
-DEFAULT_TRIGGERS["CIFAR100"] = DEFAULT_TRIGGERS["CIFAR10"]
-DEFAULT_TRANSFORMS["CIFAR100"] = DEFAULT_TRANSFORMS["CIFAR10"]
 
 class Pattern(Poison):
     def __init__(self, 
@@ -187,15 +237,14 @@ class Pattern(Poison):
 
 class BadNets(Pattern):
     def __init__(self, *args, **kwargs):
-        dataset = kwargs.get('params', {}).get('dataset', '').upper()
-        if "NIST" in dataset:
-            dataset = "MNIST"
-        trigger_weight = BADNETS_TRIGGER_WEIGHTS.get(dataset)
+        dataset = kwargs.get('params').get('dataset').upper()
+        trigger_weight = BADNETS_TRIGGER_WEIGHTS[dataset]
         kwargs['trigger_weight'] = trigger_weight
         super().__init__(*args, **kwargs)
         
 class Pixel(Pattern):
     def __init__(self, *args, **kwargs):
+        dataset = kwargs.get('params').get('dataset').upper()
         trigger_pattern = torch.ones((1, 1, 1))
         trigger_weight = torch.ones((1, 1, 1))
         kwargs['trigger_pattern'] = trigger_pattern

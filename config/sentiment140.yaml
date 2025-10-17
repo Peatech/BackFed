@@ -24,7 +24,6 @@ federated_val_split: 0.0 # Validation split for each client's dataset (should be
 dataset: sentiment140
 datapath: data
 task: classification
-partitioner: uniform
 normalize: False
 
 # *Model configuration

@@ -3,6 +3,7 @@ import torchvision.transforms.v2 as transforms
 import numpy as np
 import pickle
 import random
+import os
 
 from .base import Poison
 from omegaconf import DictConfig
@@ -50,22 +51,30 @@ class EdgeCase(Poison):
             self.edge_case_test = torch.stack([self.transform_edge_case(img) for img in saved_southwest_dataset_test]) 
 
         elif "NIST" in self.params.dataset.upper():
+            if os.path.exists('backfed/poisons/shared/edge-case/ARDIS.tar.gz'):
+                log(INFO, "ARDIS dataset archive found, extracting...")
+                import tarfile
+                with tarfile.open('backfed/poisons/shared/edge-case/ARDIS.tar.gz', 'r:gz') as tar:
+                    tar.extractall(path='backfed/poisons/shared/edge-case/')
+                log(INFO, "Extraction completed.")
+                os.remove('backfed/poisons/shared/edge-case/ARDIS.tar.gz')
+
             # Load ARDIS train dataset
-            train_ardis_images=np.loadtxt('./data/ARDIS/ARDIS_train_2828.csv', dtype='float')
-            train_ardis_labels=np.loadtxt('./data/ARDIS/ARDIS_train_labels.csv', dtype='float')
+            train_ardis_images=np.loadtxt('backfed/poisons/shared/edge-case/ARDIS_train_2828.csv', dtype='float')
+            train_ardis_labels=np.loadtxt('backfed/poisons/shared/edge-case/ARDIS_train_labels.csv', dtype='float')
 
             #### reshape to be [samples][width][height]
             train_ardis_images = train_ardis_images.reshape(train_ardis_images.shape[0], 28, 28).astype('float32')
 
-            #### get the test images with label 7
+            #### get the train images with label 7
             train_indices_seven = np.where(train_ardis_labels[:,7] == 1)[0] # labels are one-hot encoded
             train_images_seven = train_ardis_images[train_indices_seven,:]
             train_images_seven = torch.tensor(train_images_seven).type(torch.uint8)
             # train_labels_seven = torch.tensor([7 for y in train_ardis_labels])
 
             # Load ARDIS test dataset
-            test_ardis_images=np.loadtxt('./data/ARDIS/ARDIS_test_2828.csv', dtype='float')
-            test_ardis_labels=np.loadtxt('./data/ARDIS/ARDIS_test_labels.csv', dtype='float')
+            test_ardis_images=np.loadtxt('backfed/poisons/shared/edge-case/ARDIS_test_2828.csv', dtype='float')
+            test_ardis_labels=np.loadtxt('backfed/poisons/shared/edge-case/ARDIS_test_labels.csv', dtype='float')
 
             #### reshape to be [samples][width][height]
             test_ardis_images = test_ardis_images.reshape(test_ardis_images.shape[0], 28, 28).astype('float32')
@@ -117,4 +126,4 @@ class EdgeCase(Poison):
             backdoored_loss = loss_fn(outputs, target_labels).item()
 
         backdoor_accuracy = backdoored_preds / len(edge_case_test)
-        return backdoored_loss, backdoor_accuracy
+        return len(edge_case_test), backdoored_loss, backdoor_accuracy

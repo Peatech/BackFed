@@ -118,11 +118,13 @@ class Distributed(Poison):
         poison_inputs = inputs.clone()
         positions = self.trigger_positions[self.client_id]
         
+        trigger_pixel = 1.0  # White pixel
+        
         if self.client_id != -1:
             # Client-side: Single assignment for one trigger
             poison_inputs[:, :, 
                          positions['start_x']:positions['end_x'],
-                         positions['start_y']:positions['end_y']] = 1.0
+                         positions['start_y']:positions['end_y']] = trigger_pixel
         else:
             # Ensure server trigger mask is on the same device as inputs
             if self.server_trigger_mask.device != inputs.device:
@@ -132,7 +134,7 @@ class Distributed(Poison):
             mask = self.server_trigger_mask.unsqueeze(0).expand_as(poison_inputs)
             poison_inputs = torch.where(
                 mask == 1,
-                torch.ones_like(poison_inputs),
+                torch.ones_like(poison_inputs) * trigger_pixel,
                 poison_inputs
             )
         return poison_inputs

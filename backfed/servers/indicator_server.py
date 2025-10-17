@@ -24,7 +24,9 @@ OOD_TRANSFORMATIONS = {
     "EMNIST": transforms.Compose([
         transforms.ToImage(),
         transforms.ToDtype(torch.float32, scale=True),
-        transforms.Normalize(mean=[0.5], std=[0.5]),
+        transforms.RandomRotation([90, 90]), # Rotate 90 degrees (clockwise or counter-clockwise depends on implementation, but 90 deg rotation is key)
+        transforms.RandomHorizontalFlip(p=1.0), # Flip horizontally with p=1.0 (always flip)
+        transforms.Normalize(mean=[0.1307], std=[0.3081]),
     ]),
     "CIFAR10": transforms.Compose([
         transforms.ToImage(),

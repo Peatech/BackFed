@@ -13,7 +13,7 @@ from logging import INFO
 DEFAULT_PARAMS = {
     "atk_eps": 0.3,
     "atk_test_eps": 0.05,  # Target epsilon after decay
-    "eps_decay_rate": 0.1,  # Decay rate per round
+    "eps_decay_rate": 0.01,  # Decay rate per round
     "atk_lr": 0.01,
     "outter_epochs": 100,
     "save_atk_model_at_last": True,
@@ -21,7 +21,7 @@ DEFAULT_PARAMS = {
 
 class IBA(Poison):
     def __init__(self, params: DictConfig, client_id: int = -1, **kwargs):
-        super().__init__(params, client_id, sync_poison=True) # Sync poison resources across clients in parallel mode
+        super().__init__(params, client_id)
         
         # Merge default parameters with provided kwargs
         params_to_update = DEFAULT_PARAMS.copy()
@@ -29,6 +29,8 @@ class IBA(Poison):
         
         for key, value in params_to_update.items():
             setattr(self, key, value)
+
+        self.sync_poison = True  # Sync poison resources across clients
 
         # Initialize local model
         if "NIST" in self.params.dataset.upper():  
@@ -89,7 +91,7 @@ class IBA(Poison):
         self.atk_model.train()  # trigger model
         num_attack_sample = -1  # poison all samples
 
-        local_asr, threshold_asr = 0.0, 0.70
+        local_asr, threshold_asr = 0.0, 0.85  # Stop training if local ASR exceeds threshold
         atk_optimizer = torch.optim.Adam(self.atk_model.parameters(), lr=self.atk_lr)
         
         for atk_train_epoch in range(self.outter_epochs):

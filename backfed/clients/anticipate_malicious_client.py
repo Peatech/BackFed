@@ -358,8 +358,8 @@ class AnticipateClient(MaliciousClient):
 
                 # Optimizer step
                 optimizer.step()
-                
-                if self.verbose and batch_idx % (len(self.train_loader) // 3) == 0:
+
+                if self.verbose and (batch_idx == len(self.train_loader) or batch_idx % (len(self.train_loader) // 3) == 0):
                     log(INFO, f"Client [{self.client_id}] ({self.client_type}) - "
                              f"Round {server_round}, Epoch {internal_epoch}, Batch {batch_idx}/{len(self.train_loader)}, "
                              f"Loss: {loss.item():.4f}")

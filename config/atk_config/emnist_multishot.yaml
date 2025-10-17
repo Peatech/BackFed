@@ -10,7 +10,7 @@ model_poison_method: base # Choose from the key in model_poison below
 # *Training settings
 use_atk_optimizer: True # If False, use the same optimizer (including learning rate) as other clients
 atk_optimizer: sgd # Choose from the key in optimizer section below. Will be overridden to store DictConfig in atk_optimizer_config
-poisoned_lr: 0.05
+poison_lr: 0.05
 poison_epochs: 6
 step_scheduler: True
 step_size: 2
@@ -55,7 +55,7 @@ source_class: 0 # For "one2one" attack, specify source class
 
 # *Poisoning period
 poison_start_round: 1001
-poison_end_round: 1300
+poison_end_round: 1200
 
 # *Poisoning frequency
 # 1. single-shot: All malicious clients poison the data in only round {poison_start_round} and then stop.
@@ -143,7 +143,7 @@ model_poison_config:
   anticipate:
     _target_: backfed.clients.AnticipateClient
     anticipate_steps: 9
-    anticipate_lr: ${atk_config.poisoned_lr}
+    anticipate_lr: ${atk_config.poison_lr}
     anticipate_gamma: 1
     anticipate_momentum: 0.9
     num_benign_users: 9
@@ -153,13 +153,13 @@ model_poison_config:
 atk_optimizer_config:
   sgd:
     _target_: torch.optim.SGD
-    lr: ${atk_config.poisoned_lr}  # inherit poisoned_lr
+    lr: ${atk_config.poison_lr}  # inherit poison_lr
     momentum: 0.9
     weight_decay: 5e-4
     nesterov: false
   adam:
     _target_: torch.optim.Adam
-    lr: ${atk_config.poisoned_lr}  # inherit poisoned_lr
+    lr: ${atk_config.poison_lr}  # inherit poison_lr
     betas: [0.9, 0.999]
     eps: 1e-08
     weight_decay: 5e-4

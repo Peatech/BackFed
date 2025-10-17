@@ -15,7 +15,7 @@ model_poison_method: reddit_malicious # Choose from the key in model_poison belo
 # *Training settings
 use_atk_optimizer: True # If False, use the same optimizer (including learning rate) as other clients
 atk_optimizer: sgd # Choose from the key in optimizer section below. Will be overridden to store DictConfig in atk_optimizer_config
-poisoned_lr: 2
+poison_lr: 2
 poison_epochs: 10
 step_scheduler: False
 poison_until_convergence: False # If true, train until the backdoor loss converges
@@ -67,7 +67,7 @@ model_poison_config:
 atk_optimizer_config:
   sgd:
     _target_: torch.optim.SGD
-    lr: ${atk_config.poisoned_lr}  # inherit poisoned_lr
+    lr: ${atk_config.poison_lr}  # inherit poison_lr
     momentum: 0.0
     weight_decay: 0
     nesterov: false

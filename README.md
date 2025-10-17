@@ -29,7 +29,7 @@ BackFed is a comprehensive benchmark framework to efficiently and reliably evalu
 
 | **Dataset** | **Task** | **Models** | **Data Distribution** |
 | :-- | :-- | :-- | :-- |
-| CIFAR-10 | image classification | ResNet + VGG models | IID (Uniform) + Simulated Non-IID (Dirichlet) |
+| CIFAR-10/100 | image classification | ResNet + VGG models | IID (Uniform) + Simulated Non-IID (Dirichlet) |
 | EMNIST (ByClass) | handwritten recognition | MnistNet + ResNet models | IID (Uniform) + Dirichlet Non-IID (Dirichlet) |
 | Tiny-Imagenet | image classification | Any Pytorch models | IID (Uniform) + Dirichlet Non-IID (Dirichlet) |
 | FEMNIST (Federated version of EMNIST) | handwritten recognition | MnistNet + ResNet models | Natural Non-IID (split by writers) |

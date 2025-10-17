@@ -62,13 +62,37 @@ class FL_DataLoader:
         dataset_name = self.config["dataset"].upper()
 
         # Define standard transformations
-        if "NIST" in dataset_name:
+        if "MNIST" in dataset_name:
             self.train_transform = transforms.Compose([
                 transforms.ToImage(),
                 transforms.ToDtype(torch.float32, scale=True),
             ])
             self.test_transform = transforms.Compose([
                 transforms.ToImage(),
+                transforms.ToDtype(torch.float32, scale=True),
+            ])
+        elif "EMNIST" in dataset_name:
+            self.train_transform = transforms.Compose([
+                transforms.ToImage(),
+                transforms.ToDtype(torch.float32, scale=True),
+                transforms.RandomRotation([90, 90]), # Rotate 90 degrees (clockwise or counter-clockwise depends on implementation, but 90 deg rotation is key)
+                transforms.RandomHorizontalFlip(p=1.0), # Flip horizontally with p=1.0 (always flip)
+            ])
+            self.test_transform = transforms.Compose([
+                transforms.ToImage(),
+                transforms.ToDtype(torch.float32, scale=True),
+                transforms.RandomRotation([90, 90]), # Rotate 90 degrees (clockwise or counter-clockwise depends on implementation, but 90 deg rotation is key)
+                transforms.RandomHorizontalFlip(p=1.0), # Flip horizontally with p=1.0 (always flip)
+            ])
+        elif "FEMNIST" in dataset_name:
+            self.train_transform = transforms.Compose([
+                transforms.ToImage(),
+                transforms.Lambda(lambda x: 1.0 - x),  # Invert the grayscale
+                transforms.ToDtype(torch.float32, scale=True),
+            ])
+            self.test_transform = transforms.Compose([
+                transforms.ToImage(),
+                transforms.Lambda(lambda x: 1.0 - x),  # Invert the grayscale
                 transforms.ToDtype(torch.float32, scale=True),
             ])
         elif dataset_name in ["CIFAR10", "CIFAR100"]:

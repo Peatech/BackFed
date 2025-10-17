@@ -260,7 +260,10 @@ class MaliciousClient(BaseClient):
                 if proximal_mu is not None:
                     proximal_term = self.model_dist(global_params_tensor=global_params_tensor, gradient_calc=True)
                     loss += (proximal_mu / 2) * proximal_term
-
+                
+                if torch.isnan(loss):
+                    import ipdb; ipdb.set_trace()
+                    
                 # Backward pass
                 loss.backward()
 

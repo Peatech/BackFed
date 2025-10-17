@@ -22,7 +22,7 @@ DEFAULT_PARAMS = {
 
 class A3FL(Pattern):
     def __init__(self, params, client_id: int = -1, **kwargs):
-        super().__init__(params, client_id, sync_poison=True) # Sync poison resources across clients in parallel mode
+        super().__init__(params, client_id) # Sync poison resources across clients in parallel mode
         
         # Merge default parameters with provided kwargs
         params_to_update = DEFAULT_PARAMS.copy()
@@ -30,7 +30,9 @@ class A3FL(Pattern):
         
         for key, value in params_to_update.items():
             setattr(self, key, value)
-            
+        
+        self.sync_poison = True  # Sync poison resources across clients
+
         self.trigger_image *= 0.5  # Follow the original implementation
         self.adversarial_loss_fn = CrossEntropyLoss()  # Default loss function for adversarial training
         self.trigger_name = "a3fl_trigger" # Save name for the trigger image in trigger_path
@@ -95,7 +97,7 @@ class A3FL(Pattern):
         ce_loss_fn = CrossEntropyLoss()
 
         num_attack_sample = -1
-        local_asr, threshold_asr = 0.0, 0.70
+        local_asr, threshold_asr = 0.0, 0.85
         
         for trigger_train_epoch in range(self.trigger_outter_epochs):
             if local_asr > threshold_asr:

@@ -7,7 +7,7 @@ defaults:
 
 # *Aggregator
 aggregator: unweighted_fedavg
-checkpoint: checkpoints/EMNIST_BYCLASS_unweighted_fedavg/mnistnet_round_1000_dir_0.5.pth
+checkpoint: 2000
 
 # *Specify if the attack is enabled
 no_attack: False
@@ -23,8 +23,6 @@ federated_val_split: 0.0 # Validation split for each client's dataset (should be
 dataset: FEMNIST 
 datapath: data
 task: classification
-partitioner: dirichlet # Choose from [uniform, dirichlet]
-alpha: 0.5 # Dirichlet distribution parameter
 normalize: True # Normalize the dataset
 
 # *Model configuration

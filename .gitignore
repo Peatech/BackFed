@@ -75,3 +75,5 @@ outputs
 figures/
 csv_results/
 data/ARDIS
+*.png
+*.jpg

@@ -168,7 +168,7 @@ def get_normalization(dataset_name: str):
     """Normalization is separated so that the trigger pattern can be normalized."""
     dataset = dataset_name.upper()
     if "NIST" in dataset:
-        return transforms.Normalize(mean=[0.5], std=[0.5])  # Common practice for MNIST, though mean=0.1307, std=0.3081 also used
+        return transforms.Normalize(mean=[0.1307], std=[0.3081])
     elif dataset in ["CIFAR10", "CIFAR100"]:
         return transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010])
     elif dataset == "TINYIMAGENET":
