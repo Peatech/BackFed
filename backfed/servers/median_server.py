@@ -111,42 +111,51 @@ class GeometricMedianServer(RobustAggregationServer):
         return [self._weighted_average_component(component, weights=weights) for component in zip(*points)]
 
     @torch.no_grad()
-    def _geometric_median(self, points: List[torch.Tensor], max_iter: int = 80, tol: float = 1e-5) -> torch.Tensor:
+    def _geometric_median(self, points: List[torch.Tensor], weights: torch.Tensor = None, eps: float = None, maxiter: int = None, ftol: float = None) -> torch.Tensor:
         """
         Compute geometric median using Weiszfeld algorithm.
 
         Args:
             points: List of points, where each point is a list of tensors
-            weights: Tensor of weights for each point
+            weights: Tensor of weights for each point (defaults to uniform weights)
             eps: Smoothing parameter to avoid division by zero
             maxiter: Maximum number of iterations
             ftol: Tolerance for function value convergence
 
         Returns:
-            SimpleNamespace with median estimate and convergence information
+            Geometric median of the points
         """
+        # Use default values from instance if not provided
+        if eps is None:
+            eps = self.eps
+        if maxiter is None:
+            maxiter = self.maxiter
+        if ftol is None:
+            ftol = self.ftol
+
         # Initialize median estimate at weighted mean
-        weights = torch.ones(len(points), device=self.device) / len(points)
+        if weights is None:
+            weights = torch.ones(len(points), device=self.device) / len(points)
+        else:
+            weights = weights / weights.sum()
+
         median = self._weighted_average(points, weights)
         objective_value = self._geometric_median_objective(median, points, weights)
 
         log(INFO, f"Initial objective value: {objective_value.item()}")
 
-        eps = 1e-6
-        ftol = 1e-6
         # Weiszfeld iterations
-        for iteration in range(max_iter):
+        for iteration in range(maxiter):
             prev_obj_value = objective_value
             denom = torch.stack([self._l2distance(p, median) for p in points])
-            new_weights = weights / torch.clamp(denom, min=eps) 
+            new_weights = weights / torch.clamp(denom, min=eps)
             median = self._weighted_average(points, new_weights)
 
             objective_value = self._geometric_median_objective(median, points, weights)
             log(INFO, f"Iteration {iteration}: Objective value: {objective_value.item()}")
             if abs(prev_obj_value - objective_value) <= ftol * objective_value:
                 break
-            
-        median = self._weighted_average(points, new_weights)  # for autodiff
+
         return median
 
     def aggregate_client_updates(self, client_updates: List[Tuple[client_id, num_examples, StateDict]]) -> bool:

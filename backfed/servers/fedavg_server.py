@@ -22,22 +22,31 @@ class UnweightedFedAvgServer(BaseServer):
         self.eta = eta
         log(INFO, f"Initialized UnweightedFedAvg server with eta={eta}")
 
-    def _compute_client_distance(self, client_state: StateDict) -> float:
+    @torch.no_grad()
+    def compute_client_distance(self, client_state: StateDict) -> float:
         """
         Compute L2 distance between client model and global model for differentiable parameters only.
         """
-        flatten_weights = []
-        
-        for name, global_param in self.global_model.named_parameters():
-            diff = client_state[name].to(device=self.device, dtype=global_param.dtype) - global_param
-            flatten_weights.append(diff.view(-1))
-
-        if not flatten_weights:
-            return 0.0
-        
-        flatten_weights = torch.cat(flatten_weights)
-        weight_diff_norm = torch.linalg.norm(flatten_weights, ord=2)
+        flatten_client_weights = self.parameters_dict_to_vector(client_state).to(self.device)
+        weight_diff_norm = torch.linalg.norm(flatten_client_weights - self.global_parameters_vector, ord=2)
         return weight_diff_norm.item()
+    
+    def parameters_dict_to_vector(self, state_dict: StateDict) -> torch.Tensor:
+        """Convert parameters dictionary to flat vector, excluding BatchNorm buffers."""
+        vec = []
+        for name, param in state_dict.items():
+            if "running" in name or "num_batches_tracked" in name:  # Skip buffers (non-trainable parameters)
+                continue
+            vec.append(param.view(-1))
+        return torch.cat(vec)
+    
+    @property
+    def global_parameters_vector(self) -> torch.Tensor:
+        """Get global model parameters as a flat vector, excluding BatchNorm buffers and ignored weights."""
+        vec = []
+        for name, param in self.global_model.named_parameters():  # Only trainable params            
+            vec.append(param.view(-1))
+        return torch.cat(vec)
 
     def aggregate_client_updates(self, client_updates: List[Tuple[client_id, num_examples, StateDict]]):
         """
@@ -52,7 +61,7 @@ class UnweightedFedAvgServer(BaseServer):
         # Report client-global model distances
         if self.verbose:
             for client_id_val, _, client_state in client_updates:
-                distance = self._compute_client_distance(client_state)
+                distance = self.compute_client_distance(client_state)
                 log(INFO, f"Client {client_id_val} has weight diff norm {distance:.4f}")
 
         # Cumulative model updates with equal weights
@@ -95,7 +104,7 @@ class WeightedFedAvgServer(BaseServer):
         self.eta = eta
         log(INFO, f"Initialized Weighted FedAvg server with eta={eta}")
 
-    def _compute_client_distance(self, client_state: StateDict) -> float:
+    def compute_client_distance(self, client_state: StateDict) -> float:
         """
         Compute L2 distance between client model and global model for differentiable parameters only.
         """
@@ -122,7 +131,7 @@ class WeightedFedAvgServer(BaseServer):
         # Report client-global model distances
         if self.verbose:
             for client_id_val, _, client_state in client_updates:
-                distance = self._compute_client_distance(client_state)
+                distance = self.compute_client_distance(client_state)
                 log(INFO, f"Client {client_id_val} has weight diff norm {distance:.4f}")
 
         # Cumulative model updates with weights proportional to number of samples

@@ -1,55 +1,71 @@
 """
 Defense category base classes for federated learning.
+
+This module provides base classes for categorizing defense mechanisms:
+- ClientSideDefenseServer: Defenses that modify client training
+- RobustAggregationServer: Defenses that use robust aggregation algorithms
+- AnomalyDetectionServer: Defenses that detect and filter malicious updates
 """
 import wandb
 import warnings
 import torch
 import numpy as np
+from abc import abstractmethod
+
 # Suppress specific scikit-learn deprecation warnings
 warnings.filterwarnings("ignore", message="'force_all_finite' was renamed to 'ensure_all_finite'")
 
 from sklearn.cluster import KMeans
-from backfed.servers.base_server import BaseServer
 from backfed.servers.fedavg_server import UnweightedFedAvgServer
 from backfed.utils import log
 from backfed.const import client_id, num_examples, StateDict
 from typing import List, Tuple, Dict
 from logging import INFO, WARNING
 
+
+# ============= Type Aliases =============
+MaliciousClientsIds = List[int]
+BenignClientsIds = List[int]
+
+
+# ============= Base Server Classes =============
+
 class ClientSideDefenseServer(UnweightedFedAvgServer):
-    """Base class for all client-side defenses.
+    """
+    Base class for all client-side defenses.
 
     Client-side defenses operate during client training by modifying the client's
     training process, objective function, or update mechanism before sending to the server.
-    """
-    defense_categories = ["client_side"]
 
-    def __init__(self, server_config, server_type, eta, **kwargs):
+    Examples: FedProx, LocalDP
+    """
+
+    def __init__(self, server_config, server_type, eta=0.1, **kwargs):
         super().__init__(server_config, server_type, eta, **kwargs)
 
 
 class RobustAggregationServer(UnweightedFedAvgServer):
-    """Base class for all robust aggregation defenses.
+    """
+    Base class for all robust aggregation defenses.
 
     Robust aggregation defenses modify the aggregation algorithm to be resilient
-    against malicious updates, typically by using robust statistics.
+    against malicious updates, typically by using robust statistics or downweighting malicious updates.
+
+    Examples: Median, Trimmed Mean, Krum, FoolsGold
     """
-    defense_categories = ["robust_aggregation"]
 
     def __init__(self, server_config, server_type="robust_aggregation", eta=0.1, **kwargs):
         super().__init__(server_config, server_type, eta, **kwargs)
 
-
-MaliciousClientsIds = List[int]
-BenignClientsIds = List[int]
-
 class AnomalyDetectionServer(UnweightedFedAvgServer):
-    """Base class for all anomaly detection defenses.
+    """
+    Base class for all anomaly detection defenses.
 
     Anomaly detection defenses identify and filter malicious updates by detecting
     statistical anomalies or patterns indicative of attacks.
+
+    Examples: FLDetector, FLTrust, DeepSight
     """
-    defense_categories = ["anomaly_detection"]
 
     def __init__(self, server_config, server_type="anomaly_detection", eta=0.1, **kwargs):
         super().__init__(server_config, server_type, eta, **kwargs)
@@ -59,13 +75,14 @@ class AnomalyDetectionServer(UnweightedFedAvgServer):
         self.true_negatives = 0
         self.false_negatives = 0
 
+    @abstractmethod
     def detect_anomalies(self, client_updates: List[Tuple[client_id, num_examples, StateDict]], **kwargs) -> Tuple[MaliciousClientsIds, BenignClientsIds]:
         """
         Detect anomalies in the updates. This method should be overridden by defenses.
 
         Args:
             client_updates: List of client updates to check for anomalies
-            **kwargs: Additional arguments for detection 
+            **kwargs: Additional arguments for detection
 
         Returns:
             Tuple of lists:
@@ -73,18 +90,18 @@ class AnomalyDetectionServer(UnweightedFedAvgServer):
             - List of client_ids classified as benign
         """
         pass
-    
+
     def gap_statistics(self, data: np.ndarray, num_sampling: int, K_max: int, n: int) -> int:
         """Implement gap statistics for optimal cluster number selection.
-        
+
         Note: We convert to numpy for sklearn compatibility, but use PyTorch for preprocessing.
         """
         if isinstance(data, torch.Tensor):
             data = data.cpu().numpy() # Convert to numpy for sklearn compatibility
-        
+
         # Reshape data
         data = data.reshape(data.shape[0], -1)
-        
+
         # Normalize data (min-max scaling)
         data_c = np.zeros_like(data)
         for i in range(data.shape[1]):
@@ -135,7 +152,7 @@ class AnomalyDetectionServer(UnweightedFedAvgServer):
             if gaps[k-1] >= gaps[k] - s_values[k]:
                 return k
         return K_max
-    
+
     def aggregate_client_updates(self, client_updates: List[Tuple[client_id, num_examples, Dict]]):
         """
         AnomalyDetectionServer procedure: Find malicious clients, evaluate detection, and aggregate benign updates.
@@ -149,12 +166,12 @@ class AnomalyDetectionServer(UnweightedFedAvgServer):
         if not client_updates:
             log(WARNING, "No client updates found, using global model")
             return False
-        
+
         # Detect anomalies & evaluate detection
         malicious_clients, benign_clients = self.detect_anomalies(client_updates)
         true_malicious_clients = self.get_clients_info(self.current_round)["malicious_clients"]
         detection_metrics = self.evaluate_detection(malicious_clients, true_malicious_clients, len(client_updates))
-        
+
         # Aggregate benign updates
         benign_updates = [client_update for client_update in client_updates if client_update[0] in benign_clients]
         return super().aggregate_client_updates(benign_updates)
@@ -166,7 +183,7 @@ class AnomalyDetectionServer(UnweightedFedAvgServer):
         Args:
             malicious_clients: List of indices that were detected as anomalous
             true_malicious_clients: List of indices that are actually malicious (ground truth)
-            total_updates: Total number of updates being evaluated 
+            total_updates: Total number of updates being evaluated
 
         Returns:
             Dictionary with precision, recall, F1, and FPR for this round.
@@ -191,7 +208,7 @@ class AnomalyDetectionServer(UnweightedFedAvgServer):
                 self.clean_rounds = 0
                 self.clean_false_positives = 0
                 self.clean_true_negatives = 0
-            
+
             self.clean_rounds += 1
             self.clean_false_positives += fp
             self.clean_true_negatives += tn
@@ -219,7 +236,7 @@ class AnomalyDetectionServer(UnweightedFedAvgServer):
                 "f1_score": f1,
                 "fpr": fpr,
             }
-                
+
         log(INFO, detection_metrics)
         log(INFO, f"═══════════════════════════════════════════════")
 
@@ -252,7 +269,7 @@ class AnomalyDetectionServer(UnweightedFedAvgServer):
         recall = self.true_positives / max(self.true_positives + self.false_negatives, 1)
         f1 = 2 * precision * recall / max(precision + recall, 1e-10)
         fpr = self.false_positives / max(self.false_positives + self.true_negatives, 1)
-        
+
         # Calculate FPR for clean rounds
         fpr_clean = 0.0
         if hasattr(self, 'clean_rounds') and self.clean_rounds > 0:
@@ -265,11 +282,11 @@ class AnomalyDetectionServer(UnweightedFedAvgServer):
             "f1_score": f1,
             "fpr": fpr,
         }
-        
+
         # Add clean FPR if we have clean rounds
         if hasattr(self, 'clean_rounds') and self.clean_rounds > 0:
             result["fpr_clean"] = fpr_clean
-        
+
         return result
 
     def reset_detection_metrics(self):
@@ -278,22 +295,12 @@ class AnomalyDetectionServer(UnweightedFedAvgServer):
         self.false_positives = 0
         self.true_negatives = 0
         self.false_negatives = 0
-        
+
         # Reset clean round metrics if they exist
         if hasattr(self, 'clean_rounds'):
             self.clean_rounds = 0
             self.clean_false_positives = 0
             self.clean_true_negatives = 0
 
-class PostAggregationServer(UnweightedFedAvgServer):
-    """Base class for all post-aggregation defenses.
 
-    Post-aggregation defenses apply additional processing after the initial aggregation
-    to further mitigate the impact of malicious updates.
-    """
-    defense_categories = ["post_aggregation"]
-
-    def __init__(self, server_config, server_type, **kwargs):
-        super().__init__(server_config, server_type, **kwargs)
-
-# For Hybrid defenses, we can do multiple inheritance (see FlameServer)
+# For Hybrid defenses, we can use multiple inheritance (see FlameServer)

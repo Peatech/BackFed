@@ -9,7 +9,6 @@ from backfed.servers.defense_categories import (
     ClientSideDefenseServer,
     RobustAggregationServer,
     AnomalyDetectionServer,
-    PostAggregationServer
 )
 from backfed.servers.base_server import BaseServer
 
@@ -30,8 +29,6 @@ def get_defense_category(server_class: Type[BaseServer]) -> List[str]:
         categories.append("robust_aggregation")
     if issubclass(server_class, AnomalyDetectionServer):
         categories.append("anomaly_detection")
-    if issubclass(server_class, PostAggregationServer):
-        categories.append("post_aggregation")
 
     return categories
 
@@ -49,7 +46,6 @@ def get_all_defenses() -> Dict[str, List[str]]:
         "client_side": [],
         "robust_aggregation": [],
         "anomaly_detection": [],
-        "post_aggregation": [],
         "hybrid": []
     }
 

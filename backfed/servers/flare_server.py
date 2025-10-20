@@ -73,9 +73,8 @@ class FlareServer(RobustAggregationServer):
                                     
         # Sample m indices of the auxiliary class from the training set
         chosen_indices = []
-        targets = getattr(self.trainset, 'targets', None)
-        if targets is None:
-            targets = getattr(self.trainset, 'labels', None)
+        targets = getattr(self.trainset, 'targets', None) or getattr(self.trainset, 'labels', None)
+        
         if targets is not None:
             for idx, label in enumerate(targets):
                 if label == self.aux_class:
@@ -83,21 +82,23 @@ class FlareServer(RobustAggregationServer):
                     if len(chosen_indices) >= self.m:
                         break
         else:
-            # Fallback: try to access label from dataset[idx][1]
-            idx = 0
-            while len(chosen_indices) < self.m and idx < len(self.trainset):
+            # Fallback: iterate through dataset to find samples of aux_class
+            for idx in range(len(self.trainset)):
+                if len(chosen_indices) >= self.m:
+                    break
                 sample = self.trainset[idx]
                 label = sample[1] if isinstance(sample, (tuple, list)) and len(sample) > 1 else None
                 if label == self.aux_class:
                     chosen_indices.append(idx)
-                idx += 1
+
         if len(chosen_indices) < self.m:
             raise ValueError(f"Not enough samples of class {self.aux_class} in the training set.")
         
+        aux_tensors = torch.stack([self.trainset[i][0] for i in chosen_indices])
         if self.normalization:
-            self.aux_inputs = self.normalization(torch.stack([self.trainset[i][0] for i in chosen_indices]).to(self.device))
+            self.aux_inputs = self.normalization(aux_tensors).to(self.device)
         else:
-            self.aux_inputs = torch.stack([self.trainset[i][0] for i in chosen_indices]).to(self.device)
+            self.aux_inputs = aux_tensors.to(self.device)
             
     def _kernel_function(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         """Compute RBF kernel matrix between two sets of vectors."""
@@ -148,13 +149,14 @@ class FlareServer(RobustAggregationServer):
             temp_model.load_state_dict(model_update)
             temp_model.eval()
             
-            # get feature_extractor
+            # Get feature_extractor
             feature_extractor, _ = bypass_last_layer(temp_model)
             feature_extractor.to(self.device).eval()
-            
+
+            # Add client features
             with torch.no_grad():
                 features = feature_extractor(self.aux_inputs)
-                client_features.append(features.cpu())
+            client_features.append(features)
         
         num_clients = len(client_updates)
         distance_matrix = torch.zeros((num_clients, num_clients), dtype=torch.float32)

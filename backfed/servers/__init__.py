@@ -7,7 +7,6 @@ from backfed.servers.defense_categories import (
     ClientSideDefenseServer,
     RobustAggregationServer,
     AnomalyDetectionServer,
-    PostAggregationServer,
 )
 from backfed.servers.trimmed_mean_server import TrimmedMeanServer
 from backfed.servers.median_server import GeometricMedianServer, CoordinateMedianServer
@@ -32,7 +31,6 @@ __all__ = [
     "ClientSideDefenseServer",
     "RobustAggregationServer",
     "AnomalyDetectionServer",
-    "PostAggregationServer",
 
     # Server implementations
     "TrimmedMeanServer",

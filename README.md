@@ -253,7 +253,6 @@ Note: If you use debuggers (e.g., ipdb or pdb), it is recommended to set `traini
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `save_logging` | str | `csv` | Logging method (`wandb`, `csv`, `both`, or `Null`) |
-| `name_tag` | str | `""` | Custom tag for experiment name |
 | `dir_tag` | str | Auto-generated | Directory tag for organizing results |
 | `plot_data_distribution` | bool | `False` | Generate data distribution plots |
 | `plot_client_selection` | bool | `False` | Generate client selection plots |

@@ -14,11 +14,12 @@ class FoolsGoldServer(RobustAggregationServer):
     """
     FoolsGold server that uses cosine similarity to detect and defend against sybil attacks.
     """
-    def __init__(self, server_config, server_type="foolsgold", confidence=1):
+    def __init__(self, server_config, server_type="foolsgold", confidence=1, eta=0.1):
         super(FoolsGoldServer, self).__init__(server_config, server_type)
         self.confidence = confidence
+        self.eta = eta
         self.update_history: Dict[int, torch.Tensor] = {}  # client_id -> update_vector
-        log(INFO, f"Initialized FoolsGold server with confidence={confidence}")
+        log(INFO, f"Initialized FoolsGold server with confidence={confidence}, eta={eta}")
 
     def aggregate_client_updates(self, client_updates: List[Tuple[client_id, num_examples, StateDict]]) -> bool:
         """
@@ -41,6 +42,11 @@ class FoolsGoldServer(RobustAggregationServer):
             update_vector = []
             global_state_dict = self.global_model.state_dict()
             for name, param in client_params.items():
+                if "running" in name or "num_batches_tracked" in name: # Skip buffers (non-trainable parameters)
+                    continue
+                if any(pattern in name for pattern in self.ignore_weights): # Skip ignored weights
+                    continue
+
                 if name in global_state_dict:
                     diff = param.to(self.device) - global_state_dict[name]
                     update_vector.append(diff.flatten())
@@ -60,16 +66,19 @@ class FoolsGoldServer(RobustAggregationServer):
 
         # Calculate FoolsGold weights
         foolsgold_weights = self._foolsgold(client_ids)
-        log(INFO, f"FoolsGold weights (client_id, weight): {list(zip(client_ids, foolsgold_weights.tolist()))}")
+        if self.verbose:
+            log(INFO, f"FoolsGold weights (client_id, weight): {list(zip(client_ids, foolsgold_weights.tolist()))}")
 
         weight_accumulator = {
             name: torch.zeros_like(param, device=self.device)
-            for name, param in self.global_model.parameters().items()
+            for name, param in self.global_model.state_dict().items()
         }
 
         global_state_dict = self.global_model.state_dict()
         for weight, (cid, num_samples, client_state) in zip(foolsgold_weights, client_updates):
             for name, param in client_state.items():
+                if any(pattern in name for pattern in self.ignore_weights):
+                    continue
                 if name in global_state_dict:
                     diff = param.to(self.device) - global_state_dict[name]
                     weight_accumulator[name].add_(diff * weight)
@@ -78,7 +87,7 @@ class FoolsGoldServer(RobustAggregationServer):
         for name, param in self.global_model.state_dict().items():
             if any(pattern in name for pattern in self.ignore_weights):
                 continue
-            param.data.add_(weight_accumulator[name])
+            param.data.add_(weight_accumulator[name] * self.eta)
 
         return True
 

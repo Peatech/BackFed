@@ -211,8 +211,6 @@ def init_csv_logger(config, resume=False, detection=False):
         attack_name = f"{config.atk_config.model_poison_method}_{config.atk_config.data_poison_method}"
 
     name = f"{attack_name}_{aggregator.lower()}_{config.dataset.lower()}_{partitoner}_{config.atk_config.selection_scheme}_{config.atk_config.poison_frequency}"
-    if config.name_tag:
-        name = f"{name}_{config.name_tag}"
 
     file_name = os.path.join(config.output_dir, f"{name}.csv")
     print(f"Results logged to {file_name}")
@@ -301,9 +299,6 @@ def init_wandb(config):
         config.wandb.name = f"{config.dataset.lower()}_{aggregator.lower()}_noattack"
     else:
         config.wandb.name = f"{config.dataset.lower()}_{aggregator.lower()}_{config.atk_config.model_poison_method}({config.atk_config.data_poison_method})_{partitoner}_{config.atk_config.selection_scheme}_{config.atk_config.poison_frequency}"
-        
-    if config.name_tag:
-        config.wandb.name = f"{config.wandb.name}_{config.name_tag}"
 
     # Check if the run already exists and increment the version if it does
     api = wandb.Api()

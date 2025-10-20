@@ -42,3 +42,9 @@ client_config:
   optimizer: sgd # Choose from the key in optimizer section below. Will be overridden to store DictConfig in client_optimizer_config
   lr: 0.1
   weight_decay: 5e-4
+
+aggregator_config:
+  robustlr:
+    _target_: backfed.servers.RobustLRServer
+    robustLR_threshold: 7
+    eta: 0.5

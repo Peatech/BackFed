@@ -21,8 +21,6 @@ class FlameServer(AnomalyDetectionServer, RobustAggregationServer):
     robust aggregation (clipping and noise addition).
     """
 
-    defense_categories = ["anomaly_detection", "robust_aggregation"]
-
     def __init__(self, server_config, server_type="flame", lamda=0.001, eta=0.1):
         super(FlameServer, self).__init__(server_config, server_type, eta)
         self.lamda = lamda
@@ -43,25 +41,13 @@ class FlameServer(AnomalyDetectionServer, RobustAggregationServer):
         all_client_weights = []
         euclidean_distances = []
 
-        for _, _, update in client_updates:
-            flat_update = []
-            current_client_weight = []
-
-            for name, param in update.items():
-                # Move both tensors to the same device (GPU) before subtraction
-                if name in global_state_dict:
-                    diff = param.to(self.device) - global_state_dict[name].to(self.device)
-                    flat_update.append(diff.flatten())  # Keep as torch.Tensor
-
-                if name in last_layers:
-                    current_client_weight.append(param.to(self.device).flatten())  # Keep as torch.Tensor
-
-            # Concatenate on GPU for faster operations, then move to CPU for numpy conversion
-            client_weights_tensor = torch.cat(current_client_weight)
-            all_client_weights.append(client_weights_tensor.cpu().numpy().astype(np.float64))  # Convert to numpy array for HDBSCAN
+        for _, _, client_state_dict in client_updates:
+            client_weights_tensor = torch.cat([global_state_dict[name].flatten() for name in last_layers])
+            all_client_weights.append(client_weights_tensor.cpu().numpy())
 
             # Calculate norm on GPU for better performance
-            euclidean_distances.append(torch.linalg.norm(torch.cat(flat_update)))
+            client_distance = self.compute_client_distance(client_state_dict)
+            euclidean_distances.append(client_distance)
 
         # Cluster clients
         num_clients = len(client_updates)
@@ -72,7 +58,7 @@ class FlameServer(AnomalyDetectionServer, RobustAggregationServer):
             min_samples=1,
             allow_single_cluster=True
         )
-        labels = clusterer.fit_predict(np.array(all_client_weights, dtype=np.float64))
+        labels = clusterer.fit_predict(np.array(all_client_weights, dtype=np.float32))
 
         # Identify benign clients
         benign_indices = []

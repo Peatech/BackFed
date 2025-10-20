@@ -17,6 +17,7 @@ from typing import List, Tuple, Dict, Any
 from torchvision import datasets
 from logging import INFO, WARNING
 from backfed.servers.defense_categories import AnomalyDetectionServer
+from backfed.servers.fedavg_server import UnweightedFedAvgServer
 from backfed.utils.logging_utils import log
 from backfed.const import client_id, StateDict, num_examples, Metrics
 
@@ -56,15 +57,16 @@ DEFAULT_SERVER_PARAMS = {
     "replace_original_bn": True,
     "verbose": False,
     "VWM_detection_threshold": 95,
-    "early_stopping": True
+    "early_stopping": True,
+    "norm_clip": True,
+    "fix_nc_bound": False,
+    "nc_bound": 5.0
 }
 
 class IndicatorServer(AnomalyDetectionServer):
     """
     Indicator server that use OOD dataset to detect backdoor attacks.
     """
-
-    defense_categories = ["anomaly_detection"]
 
     def __init__(self, server_config, server_type="indicator", eta: float = 0.1, **kwargs):
         super(IndicatorServer, self).__init__(server_config, server_type, eta)
@@ -76,8 +78,8 @@ class IndicatorServer(AnomalyDetectionServer):
             setattr(self, key, value)
 
         self.watermarking_rounds = list(range(self.global_watermarking_start_round, self.global_watermarking_end_round, self.global_watermarking_round_interval))
-        
-        if self.config.dataset.upper() == "CIFAR10":
+
+        if self.config["dataset"].upper() == "CIFAR10":
             self.ood_data_source = "CIFAR100"
         else:
             self.ood_data_source = "CIFAR10"
@@ -96,14 +98,14 @@ class IndicatorServer(AnomalyDetectionServer):
             malicious_clients = []
             benign_clients = [client_id for client_id, _, _ in client_updates]
             return malicious_clients, benign_clients
-        
+
         benign_clients = []
         malicious_clients = []
         label_inds = []
         label_acc_ws = []
-        
+
         # Batch process clients if possible
-        for ind, (client_id, num_examples, model_state_dict) in enumerate(client_updates):            
+        for ind, (client_id, num_examples, model_state_dict) in enumerate(client_updates):
             # Update only necessary parameters
             for name, data in model_state_dict.items():
                 if "num_batches_tracked" in name:
@@ -126,18 +128,72 @@ class IndicatorServer(AnomalyDetectionServer):
             if self.verbose:
                 log(INFO, f"client {client_id} | watermarking acc: {watermark_acc}, watermarking loss: {total_l}, target label ({label_ind}) wm acc: {label_acc_w}")
                 log(INFO, wm_label_dict)
-            
+
             label_inds.append(label_ind)
             label_acc_ws.append(label_acc_w)
 
-            if label_acc_w < self.VWM_detection_threshold: 
+            if label_acc_w < self.VWM_detection_threshold:
                 benign_clients.append(client_id)
             else:
                 malicious_clients.append(client_id)
-        
+
         log(INFO, f"label ind:{label_inds}")
-        log(INFO, f"label acc wm:{label_acc_ws}") 
+        log(INFO, f"label acc wm:{label_acc_ws}")
         return malicious_clients, benign_clients
+
+    def aggregate_client_updates(self, client_updates: List[Tuple[client_id, num_examples, Dict]]):
+        """
+        Override to add norm clipping before anomaly detection and aggregation.
+
+        Args:
+            client_updates: List of (client_id, num_examples, model_updates)
+        Returns:
+            True if the global model parameters are updated, False otherwise
+        """
+        if not client_updates:
+            log(WARNING, "No client updates found, using global model")
+            return False
+
+        # Calculate norms for all clients
+        local_norms = []
+        for client_id, num_examples, model_state_dict in client_updates:
+            norm = self._check_norm(model_state_dict, self.current_round, client_id)
+            local_norms.append(norm)
+
+        # Detect anomalies
+        malicious_clients, benign_clients = self.detect_anomalies(client_updates)
+
+        # Determine clipping bound based on benign clients
+        local_norms_array = np.array(local_norms)
+        benign_indices = [i for i, (cid, _, _) in enumerate(client_updates) if cid in benign_clients]
+
+        if len(benign_indices) > 0:
+            clip_value = np.median(local_norms_array[benign_indices]) if not self.fix_nc_bound else self.nc_bound
+        else:
+            clip_value = self.nc_bound if self.fix_nc_bound else np.median(local_norms_array)
+
+        if self.norm_clip:
+            log(INFO, f"Norm clip: clipped value is: {clip_value}")
+        else:
+            log(INFO, f"Norm clip: don't clip in this round")
+
+        # Apply norm clipping to benign clients
+        benign_updates = []
+        for client_id, num_examples, model_state_dict in client_updates:
+            if client_id in benign_clients:
+                if self.norm_clip:
+                    clipped_state_dict = self._norm_clip(model_state_dict, clip_value)
+                    benign_updates.append((client_id, num_examples, clipped_state_dict))
+                else:
+                    benign_updates.append((client_id, num_examples, model_state_dict))
+
+        # Evaluate detection performance
+        true_malicious_clients = self.get_clients_info(self.current_round)["malicious_clients"]
+        detection_metrics = self.evaluate_detection(malicious_clients, true_malicious_clients, len(client_updates))
+
+        # Call parent's aggregation (UnweightedFedAvgServer.aggregate_client_updates)
+        # Skip AnomalyDetectionServer's aggregate_client_updates to avoid double detection
+        return UnweightedFedAvgServer.aggregate_client_updates(self, benign_updates)
     
     def fit_round(self, clients_mapping: Dict[Any, List[int]]) -> Metrics:
         """Perform one round of FL training. 
@@ -518,3 +574,60 @@ class IndicatorServer(AnomalyDetectionServer):
         for name, param in source_params.items():
             if name in target_params:
                 target_params[name].copy_(param.clone())
+
+    def _check_norm(self, model_state_dict, round_num, client_id):
+        """
+        Calculate and log the L2 norm of model updates.
+
+        Args:
+            model_state_dict: Client's model state dict
+            round_num: Current round number
+            client_id: Client identifier
+
+        Returns:
+            L2 norm of the update
+        """
+        params_list = []
+        for name, param in model_state_dict.items():
+            if "running" in name or "num_batches_tracked" in name:
+                continue
+            diff_value = param - self.global_model.state_dict()[name]
+            params_list.append(diff_value.view(-1))
+
+        params_list = torch.cat(params_list)
+        l2_norm = torch.norm(params_list)
+        log(INFO, f"round:{round_num}, client {client_id} | l2_norm: {l2_norm}")
+
+        return l2_norm.item()
+
+    def _norm_clip(self, model_state_dict, clip_value):
+        """
+        Clip the local model update to an agreed bound using L2 norm.
+
+        Args:
+            model_state_dict: Client's model state dict
+            clip_value: Maximum allowed L2 norm
+
+        Returns:
+            Clipped model state dict
+        """
+        params_list = []
+        for name, param in model_state_dict.items():
+            if "running" in name or "num_batches_tracked" in name:
+                continue
+            diff_value = param - self.global_model.state_dict()[name]
+            params_list.append(diff_value.view(-1))
+
+        params_list = torch.cat(params_list)
+        l2_norm = torch.norm(params_list)
+
+        scale = max(1.0, float(torch.abs(l2_norm / clip_value)))
+
+        # Only clip if norm exceeds the bound
+        for name, data in model_state_dict.items():
+            if "running" in name or "num_batches_tracked" in name:
+                continue
+            new_value = self.global_model.state_dict()[name] + (model_state_dict[name] - self.global_model.state_dict()[name]) / scale
+            model_state_dict[name].copy_(new_value)
+
+        return model_state_dict

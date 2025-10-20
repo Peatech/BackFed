@@ -11,12 +11,12 @@ from backfed.utils import log
 from logging import INFO, WARNING
 
 DEFAULT_PARAMS = {
-    "poisoned_supcon_retrain_no_times": 10,
-    "poisoned_supcon_lr": 0.005,
-    "poisoned_supcon_momentum": 0.9,
-    "poisoned_supcon_weight_decay": 0.0005,
-    "poisoned_supcon_milestones": [3, 5, 7, 9],
-    "poisoned_supcon_lr_gamma": 0.1,
+    "poison_supcon_retrain_no_times": 10,
+    "poison_supcon_lr": 0.005,
+    "poison_supcon_momentum": 0.9,
+    "poison_supcon_weight_decay": 0.0005,
+    "poison_supcon_milestones": [3, 5, 7, 9],
+    "poison_supcon_lr_gamma": 0.1,
     "fac_scale_weight": 6,
 }
 
@@ -71,17 +71,17 @@ class ChameleonClient(MaliciousClient):
         # Setup training protocol
         self.supcon_loss = SupConLoss().cuda()
         self.supcon_optimizer = torch.optim.SGD(self.contrastive_model.parameters(), 
-                                                lr=self.atk_config["poisoned_supcon_lr"],
-                                                momentum=self.atk_config["poisoned_supcon_momentum"], 
-                                                weight_decay=self.atk_config["poisoned_supcon_weight_decay"]
+                                                lr=self.atk_config["poison_supcon_lr"],
+                                                momentum=self.atk_config["poison_supcon_momentum"], 
+                                                weight_decay=self.atk_config["poison_supcon_weight_decay"]
                                             )   
         self.supcon_scheduler = torch.optim.lr_scheduler.MultiStepLR(self.supcon_optimizer,
-                                                milestones=self.atk_config['poisoned_supcon_milestones'],
-                                                gamma=self.atk_config['poisoned_supcon_lr_gamma']
+                                                milestones=self.atk_config['poison_supcon_milestones'],
+                                                gamma=self.atk_config['poison_supcon_lr_gamma']
                                             )
 
         # Training loop
-        for internal_round in range(self.atk_config["poisoned_supcon_retrain_no_times"]):
+        for internal_round in range(self.atk_config["poison_supcon_retrain_no_times"]):
             for batch_idx, batch in enumerate(self.train_loader):
                 self.supcon_optimizer.zero_grad()
 
@@ -100,6 +100,12 @@ class ChameleonClient(MaliciousClient):
                     loss = contrastive_loss + (proximal_mu/2) * distance_loss
                 else:
                     loss = contrastive_loss
+
+                # Check for NaN in total loss
+                if torch.isnan(loss).any() or torch.isinf(loss).any():
+                    log(WARNING, f"Client [{self.client_id}] ({self.client_type}) at round {server_round} - "
+                        f"NaN/Inf detected in total loss at epoch {internal_round}, batch {batch_idx}. Skipping batch.")
+                    continue
                 
                 loss.backward()
                 self.supcon_optimizer.step()
@@ -114,7 +120,7 @@ class ChameleonClient(MaliciousClient):
 
             self.supcon_scheduler.step()
             
-            if self.verbose and internal_round % (self.atk_config["poisoned_supcon_retrain_no_times"] // 5) == 0:
+            if self.verbose and internal_round % (self.atk_config["poison_supcon_retrain_no_times"] // 5) == 0:
                 self.contrastive_model.transfer_params(target_model=self.model)
                 backdoor_total_samples, backdoor_loss, backdoor_accuracy = self.poison_module.poison_test(self.model, self.train_loader)
                 backdoor_correct_preds = round(backdoor_accuracy * backdoor_total_samples)

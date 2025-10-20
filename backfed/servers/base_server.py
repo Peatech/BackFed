@@ -32,7 +32,7 @@ from backfed.utils import (
 from backfed.context_actor import ContextActor
 from backfed.clients import BenignClient, MaliciousClient, LocalDPClient
 from backfed.client_app import ClientApp
-from backfed.poisons import Poison, IBA, A3FL
+from backfed.poisons import Poison
 from backfed.const import StateDict, Metrics, client_id, num_examples
 from logging import INFO, WARNING
 from typing import Dict, Any, List, Tuple, Callable, Optional
@@ -42,7 +42,6 @@ class BaseServer:
     """
     Base class for all FL servers.
     """
-    defense_categories = ["base"]
     ignore_weights = ["num_batches_tracked"] # Ignore non-differentiable parameters during aggregation
     
     def __init__(self, server_config, server_type="base", verbose=True, **kwargs):
@@ -88,7 +87,9 @@ class BaseServer:
             init_wandb(server_config)
 
         elif self.config.save_logging in ["csv", "both"]:
-            if "anomaly_detection" in self.defense_categories:
+            # Import here to avoid circular imports
+            from backfed.servers.defense_categories import AnomalyDetectionServer
+            if isinstance(self, AnomalyDetectionServer):
                 self.csv_logger : CSVLogger = init_csv_logger(server_config, detection=True)
             else:
                 self.csv_logger : CSVLogger = init_csv_logger(server_config)
@@ -590,6 +591,11 @@ class BaseServer:
         log(INFO, f"{separator} TRAINING COMPLETED {separator}")
         log(INFO, f"Total experiment time: {format_time_hms(experiment_time)}")
 
+        if self.config.save_logging in ["csv", "both"]:
+            self.csv_logger.finish()
+        elif self.config.save_logging in ["wandb", "both"]:
+            wandb.finish()
+
     def train_package(self, client_type: Any) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
         Send the init_args and train_package to ClientApp based on the client type.
@@ -795,7 +801,21 @@ class FLTrainer:
                     log(ERROR, f"Client [{client_id}] failed during training:\n{error_msg}\n{error_tb}")
                     continue
 
-                # If not failed, add the client package to the client_packages
+                # Check for NaN/Inf values in model updates
+                num_examples, model_updates, metrics = client_package
+                has_nan = False
+                nan_param_name = None
+                for name, param in model_updates.items():
+                    if torch.isnan(param).any() or torch.isinf(param).any():
+                        has_nan = True
+                        nan_param_name = name
+                        break
+
+                if has_nan:
+                    log(WARNING, f"Client [{client_id}] has NaN/Inf values in parameter '{nan_param_name}'. Skipping this client from aggregation.")
+                    continue
+
+                # If not failed and no NaN, add the client package to the client_packages
                 client_packages[client_id] = client_package
 
         if num_failures > 0:
@@ -859,7 +879,21 @@ class FLTrainer:
                         log(ERROR, f"Client [{client_id}] failed during training:\n{error_msg}\n{error_tb}")
                         continue
 
-                    # If not failed, add the client package to the client_packages
+                    # Check for NaN/Inf values in model updates
+                    num_examples, model_updates, metrics = client_package
+                    has_nan = False
+                    nan_param_name = None
+                    for name, param in model_updates.items():
+                        if torch.isnan(param).any() or torch.isinf(param).any():
+                            has_nan = True
+                            nan_param_name = name
+                            break
+
+                    if has_nan:
+                        log(WARNING, f"Client [{client_id}] has NaN/Inf values in parameter '{nan_param_name}'. Skipping this client from aggregation.")
+                        continue
+
+                    # If not failed and no NaN, add the client package to the client_packages
                     client_packages[client_id] = client_package
 
         if num_failures > 0:

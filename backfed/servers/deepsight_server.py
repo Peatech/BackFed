@@ -19,9 +19,7 @@ class DeepSightServer(AnomalyDetectionServer, RobustAggregationServer):
     """
     DeepSight: A defense mechanism against backdoor attacks in Federated Learning.
     Uses clustering-based approach to detect and filter malicious updates.
-    """
-    defense_categories = ["anomaly_detection", "robust_aggregation"]
-    
+    """    
     def __init__(self,
                  server_config,
                  num_seeds: int = 3,
@@ -204,12 +202,8 @@ class DeepSightServer(AnomalyDetectionServer, RobustAggregationServer):
         global_state_dict = {name: param.data for name, param in self.global_model.named_parameters()}
         for local_model_update in local_model_updates:
             # Calculate Euclidean distance
-            flat_update = []
-            for name, param in local_model_update.items():
-                if name in global_state_dict:
-                    diff = param - global_state_dict[name]
-                    flat_update.append(diff.flatten())  # Keep as torch.Tensor
-            euclidean_distances.append(torch.linalg.norm(torch.cat(flat_update)))
+            client_distance = self.compute_client_distance(local_model_update)
+            euclidean_distances.append(client_distance)
 
             # Calculate NEUPs
             diff_weight = torch.sum(torch.abs(local_model_update[last_layer_weight_name] - global_state_dict[last_layer_weight_name]), dim=1) # weight

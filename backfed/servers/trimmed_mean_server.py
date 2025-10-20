@@ -50,7 +50,7 @@ class TrimmedMeanServer(RobustAggregationServer):
         num_trim = int(num_clients * self.trim_ratio)
 
         # Update global model parameters directly
-        for name, param in self.global_model.state_dict():
+        for name, param in self.global_model.state_dict().items():
             if any(pattern in name for pattern in self.ignore_weights):
                 continue
                 

@@ -32,33 +32,20 @@ class FLTrustServer(RobustAggregationServer):
         
         self.global_lr = self.config.client_config.lr
         self.global_epochs = 1 # Follow original paper
-        self.server_optimizer = instantiate(self.config.client_config.optimizer, params=self.global_model.parameters())
 
     def _prepare_dataset(self):
         """Very hacky. We override the _prepare_dataset function to load auxiliary clean data for the defense."""
-        
-        self.fl_dataloader = FL_DataLoader(config=self.config)
-        if self.config.dataset.upper() in ["REDDIT", "FEMNIST", "SENTIMENT140"]:
-            raise NotImplementedError(f"FLARE not implemented for {self.config.dataset} dataset")
-        else:
-            self.trainset, self.client_data_indices, self.secret_dataset_indices, self.testset = self.fl_dataloader.prepare_dataset() 
-        
-        self.test_loader = DataLoader(self.testset, 
-                            batch_size=self.config.test_batch_size, 
-                            num_workers=self.config.num_workers,
-                            pin_memory=self.config.pin_memory,
-                            shuffle=False
-        )
+        super()._prepare_dataset()
                                     
-        if self.m > len(self.trainset):
-            raise ValueError(f"FLTrust: m ({self.m}) is larger than training set size ({len(self.trainset)}), reducing m to {len(self.trainset)}")
+        if self.m > len(self.testset):
+            raise ValueError(f"FLTrust: m ({self.m}) is larger than test set size ({len(self.testset)})")
 
-        random_indices = torch.randperm(len(self.trainset))[:self.m]
+        random_indices = torch.randperm(len(self.testset))[:self.m]
 
-        self.server_root_data = TensorDataset(torch.stack([self.normalization(self.trainset[i][0]) for i in random_indices]),
-                                                torch.tensor([self.trainset[i][1] for i in random_indices]))
+        self.server_root_data = TensorDataset(torch.stack([self.normalization(self.testset[i][0]) for i in random_indices]),
+                                                torch.tensor([self.testset[i][1] for i in random_indices]))
         self.server_dataloader = DataLoader(self.server_root_data, 
-                                    batch_size=self.config.client_config.batch_size, # Follo
+                                    batch_size=self.config.client_config.batch_size, # Follow client batch size
                                     shuffle=False, 
                                     num_workers=self.config.num_workers,
                                     pin_memory=self.config.pin_memory,
@@ -69,27 +56,22 @@ class FLTrustServer(RobustAggregationServer):
         ref_model = copy.deepcopy(self.global_model)
         ref_model.to(self.device)
         ref_model.train()
+
+        # Create server optimizer
+        server_optimizer = instantiate(self.config.client_config.optimizer, 
+                                       params=ref_model.parameters())
         
         loss_func = torch.nn.CrossEntropyLoss()
         for epoch in range(self.global_epochs):
             for data, label in self.server_dataloader:
                 data, label = data.to(self.device), label.to(self.device)
-                self.server_optimizer.zero_grad()
+                server_optimizer.zero_grad()
                 preds = ref_model(data)
                 loss = loss_func(preds, label)
                 loss.backward()
-                self.server_optimizer.step()
-        
-        return self._parameters_dict_to_vector(ref_model.state_dict()) - self._parameters_dict_to_vector(self.global_model.state_dict())
-    
-    def _parameters_dict_to_vector(self, net_dict: Dict) -> torch.Tensor:
-        """Convert parameters dictionary to flat vector, excluding batch norm parameters."""
-        vec = []
-        for key, param in net_dict.items():
-            if any(x in key for x in ['num_batches_tracked', 'running_mean', 'running_var']):
-                continue
-            vec.append(param.reshape(-1))
-        return torch.cat(vec)
+                server_optimizer.step()
+
+        return self.parameters_dict_to_vector(ref_model.state_dict()) - self.parameters_dict_to_vector(self.global_model.state_dict())
     
     def aggregate_client_updates(self, client_updates: List[Tuple[int, int, Dict]]) -> bool:
         """
@@ -107,13 +89,14 @@ class FLTrustServer(RobustAggregationServer):
         central_norm = torch.linalg.norm(central_update)
 
         score_list = []
+        client_ids = []
         total_score = 0
         sum_parameters = {}
 
-        global_vector = self._parameters_dict_to_vector(self.global_model.state_dict())
-        for _, _, local_update in client_updates:
+        global_vector = self.parameters_dict_to_vector(self.global_model.state_dict())
+        for client_id, _, local_update in client_updates:
             # Convert local update to vector
-            local_vector = self._parameters_dict_to_vector(local_update) - global_vector
+            local_vector = self.parameters_dict_to_vector(local_update) - global_vector
 
             # Calculate cosine similarity and trust score
             client_cos = F.cosine_similarity(central_update, local_vector, dim=0)
@@ -122,30 +105,36 @@ class FLTrustServer(RobustAggregationServer):
             client_norm_ratio = central_norm / (local_norm + 1e-12)
 
             score_list.append(client_cos)
+            client_ids.append(client_id)
             total_score += client_cos
-
-            # Accumulate weighted updates
-            for key, param in local_update.items():
-                if key not in sum_parameters:
-                    sum_parameters[key] = client_cos * client_norm_ratio * param.clone().to(self.device)
-                else:
-                    sum_parameters[key].add_(client_cos * client_norm_ratio * param.to(self.device))
-
-        if self.verbose:
-            log(INFO, f"FLTrust scores: {score_list}")
 
         # If all scores are 0, return current global model
         if total_score == 0:
             log(INFO, "FLTrust: All trust scores are 0, keeping current model")
             return False
 
-        # Update global model parameters in-place
+        fltrust_weights = [score/total_score for score in score_list]
+        if self.verbose:
+            log(INFO, f"FLTrust weights (client_id, weight): {list(zip(client_ids, fltrust_weights))}")
+
+        weight_accumulator = {
+            name: torch.zeros_like(param, device=self.device)
+            for name, param in self.global_model.state_dict().items()
+        }
+
+        global_state_dict = self.global_model.state_dict()
+        for weight, (cid, num_samples, client_state) in zip(fltrust_weights, client_updates):
+            for name, param in client_state.items():
+                if any(pattern in name for pattern in self.ignore_weights):
+                    continue
+                if name in global_state_dict:
+                    diff = param.to(self.device) - global_state_dict[name]
+                    weight_accumulator[name].add_(diff * weight)
+
+        # Update global model with learning rate
         for name, param in self.global_model.state_dict().items():
             if any(pattern in name for pattern in self.ignore_weights):
                 continue
-            if name in sum_parameters:
-                update = (sum_parameters[name] / total_score)
-                param.data.add_(update * self.eta)
+            param.data.add_(weight_accumulator[name] * self.eta)
 
-        return True
-    
+        return True    

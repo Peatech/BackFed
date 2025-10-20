@@ -6,7 +6,7 @@ This defense adjusts learning rates based on sign agreement among client updates
 import torch
 
 from typing import List, Tuple
-from logging import INFO
+from logging import INFO, WARNING
 from backfed.servers.defense_categories import RobustAggregationServer
 from backfed.const import StateDict, client_id, num_examples
 from backfed.utils import log
@@ -18,7 +18,7 @@ class RobustLRServer(RobustAggregationServer):
     """
 
     def __init__(self, server_config, server_type="robustlr",
-                 robustLR_threshold: float = 8.0,
+                 robustLR_threshold: float = 4,
                  eta: float = 0.1):
         """
         Initialize RobustLR server.
@@ -26,22 +26,14 @@ class RobustLRServer(RobustAggregationServer):
         Args:
             server_config: Server configuration
             server_type: Type of server
-            robustLR_threshold: Threshold for sign agreement to determine learning rate
-                               (0.0 means no robust learning rate adjustment)
+            robustLR_threshold: Threshold for sign agreement to determine learning rate.
+                               Parameters with sign agreement below this threshold get negative LR,
+                               effectively reversing their updates. Higher values mean stricter agreement required.
             eta: Server learning rate
         """
-        super().__init__(server_config, server_type)
+        super().__init__(server_config, server_type, eta)
         self.robustLR_threshold = robustLR_threshold
-        self.eta = eta
         log(INFO, f"Initialized RobustLR server with threshold={robustLR_threshold}, eta={eta}")
-
-    def _parameters_dict_to_vector(self, state_dict: StateDict) -> torch.Tensor:
-        """Convert parameters dictionary to flat vector, excluding BatchNorm buffers."""
-        vec = []
-        for name in self.global_model.named_parameters().keys():  # Only trainable params
-            if name in state_dict:  # Safety check
-                vec.append(state_dict[name].view(-1))
-        return torch.cat(vec)
 
     def _compute_robustLR(self, client_updates: List[torch.Tensor]) -> torch.Tensor:
         """
@@ -74,6 +66,7 @@ class RobustLRServer(RobustAggregationServer):
             True if aggregation was successful, False otherwise
         """
         if len(client_updates) == 0:
+            log(WARNING, "RobustLR: No client updates found")
             return False
 
         # Extract updates and convert to vectors
@@ -81,10 +74,11 @@ class RobustLRServer(RobustAggregationServer):
         weights = []
 
         global_state_dict = self.global_model.state_dict()
-        global_vector = self._parameters_dict_to_vector(global_state_dict)
-        for client_id, num_examples, update in client_updates:
+        global_vector = self.parameters_dict_to_vector(global_state_dict).to(self.device)
+
+        for cid, num_examples, update in client_updates:
             # Convert update to vector
-            update_vector = self._parameters_dict_to_vector(update)
+            update_vector = self.parameters_dict_to_vector(update).to(self.device)
 
             # Calculate difference from global model
             diff_vector = update_vector - global_vector
@@ -97,7 +91,7 @@ class RobustLRServer(RobustAggregationServer):
 
         # Compute weighted average of updates
         total_weight = sum(weights)
-        weighted_updates = torch.zeros_like(update_vectors[0])
+        weighted_updates = torch.zeros_like(update_vectors[0], device=self.device)
 
         for w, update in zip(weights, update_vectors):
             weighted_updates += (w / total_weight) * update
@@ -106,8 +100,6 @@ class RobustLRServer(RobustAggregationServer):
         weighted_updates *= lr_vector
 
         # Update global model parameters
-        global_state_dict = {name: param.data for name, param in self.global_model.state_dict().items()}
-        global_vector = self._parameters_dict_to_vector(global_state_dict)
         new_global_vector = global_vector + weighted_updates
 
         # Convert vector back to state dict
