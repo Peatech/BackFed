@@ -100,6 +100,7 @@ class EdgeCase(Poison):
             normalization (torch.utils.transforms.Normalize): The normalization
 
         Returns:
+            total_samples (int): The number of samples for backdoor evaluation
             backdoor_loss (float): The loss of backdoor target samples
             backdoor_accuracy (float): The accuracy of targeted misclassification
         """
@@ -117,4 +118,5 @@ class EdgeCase(Poison):
             backdoored_loss = loss_fn(outputs, target_labels).item()
 
         backdoor_accuracy = backdoored_preds / len(edge_case_test)
-        return backdoored_loss, backdoor_accuracy
+        total_samples = len(edge_case_test)
+        return total_samples, backdoored_loss, backdoor_accuracy
