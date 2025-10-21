@@ -22,7 +22,7 @@ DEFAULT_PARAMS = {
 
 class A3FL(Pattern):
     def __init__(self, params, client_id: int = -1, **kwargs):
-        super().__init__(params, client_id, sync_poison=True) # Sync poison resources across clients in parallel mode
+        super().__init__(params, client_id) # Pattern class handles basic initialization
         
         # Merge default parameters with provided kwargs
         params_to_update = DEFAULT_PARAMS.copy()

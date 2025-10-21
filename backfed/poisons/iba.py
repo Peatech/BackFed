@@ -21,7 +21,7 @@ DEFAULT_PARAMS = {
 
 class IBA(Poison):
     def __init__(self, params: DictConfig, client_id: int = -1, **kwargs):
-        super().__init__(params, client_id, sync_poison=True) # Sync poison resources across clients in parallel mode
+        super().__init__(params, client_id) # Base poison initialization
         
         # Merge default parameters with provided kwargs
         params_to_update = DEFAULT_PARAMS.copy()

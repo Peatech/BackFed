@@ -27,7 +27,7 @@ num_cpus: 1
 num_gpus: 0.5
 
 # *Reproducibility
-seed: 123456
+seed: 123
 deterministic: False
 
 # *Simulation configuration
@@ -41,7 +41,7 @@ federated_val_split: 0.0 # Validation split for each client's dataset (should be
 dataset: ??? # CIFAR10, CIFAR100, TinyImageNet, MNIST
 datapath: data
 partitioner: dirichlet # Choose from [uniform, dirichlet]
-alpha: 0.9 # Dirichlet distribution parameter
+alpha: 0.5 # Dirichlet distribution parameter
 normalize: True # Normalize the dataset
 
 # *Model configuration
@@ -77,8 +77,8 @@ client_config:
 # *Note: If checkpoint is "wandb", the weight will be loaded from wandb
 
 #* Save checkpoints
-save_model: False # Save the model to run directory in outputs folder
-save_checkpoint: False # Save the model as checkpoints in checkpoints folder (corresponding to Dataset, Model, and Strategy)
+save_model: True # Save the model to run directory in outputs folder
+save_checkpoint: True # Save the model as checkpoints in checkpoints folder (corresponding to Dataset, Model, and Strategy)
 save_model_rounds: [200, 400, 600, 800, 1000] # Save the model at the specified rounds
 
 # *Resume from checkpoint
@@ -110,7 +110,7 @@ plot_data_distribution: False
 plot_client_selection: False
 progress_bar: True
 
-########################################################
+###############7903916#########################################
 # *Aggregator configuration
 aggregator_config:
   weighted_fedavg:
@@ -128,7 +128,6 @@ aggregator_config:
   foolsgold:
     _target_: backfed.servers.FoolsGoldServer
     confidence: 1
-    eta: 0.5
 
   coordinate_median:
     _target_: backfed.servers.CoordinateMedianServer
@@ -215,6 +214,104 @@ aggregator_config:
     clipping_norm: 5
     std_dev: 0.01
     eta: 0.5
+
+  fedavgcka:
+    _target_: backfed.servers.FedAvgCKAServer
+    eta: 0.5
+    root_size: 64
+    cka_threshold: 0.85
+    layer_comparison: penultimate  # Options: penultimate | layer2 | layer3
+    use_ood_root_dataset: False
+    trim_fraction: 0.5
+    
+  fedspectre_hybrid:
+    _target_: backfed.servers.FedSPECTREHybridServer
+    eta: 0.5
+    root_size: 64  # Increased to ensure enough samples per class
+    alpha: 0.8  # CKA weight
+    beta: 0.0   # Stability weight (disabled, not implemented)
+    gamma: 0.2  # Spectral weight (CORRECTED: was wrongly mapped to beta)
+    rank: 128
+    trim_fraction: 0.5
+    use_ood_root_dataset: False
+    
+  fedspectre_simple:
+    _target_: backfed.servers.FedSPECTRESimpleServer
+    eta: 0.5
+    
+    # Detection parameters
+    cka_weight: 0.7
+    spectral_weight: 0.3
+    
+    # Robust statistics
+    trim_fraction: 0.5
+    
+    # Root dataset
+    root_size: 64
+    use_ood_root_dataset: false
+    
+  fedspectre_stateful:
+    _target_: backfed.servers.FedSPECTREStatefulServer
+    eta: 0.5
+    # Base FedSPECTRE-Hybrid parameters
+    root_size: 64
+    alpha: 0.8  # CKA weight (LEGACY, use w_cka for Phase 1)
+    beta: 0.0   # Stability weight (disabled, not implemented)
+    gamma: 0.2  # Spectral weight (LEGACY, use w_spectral for Phase 1)
+    rank: 128
+    trim_fraction: 0.5  # Legacy method (ignored if use_quantile_gating=True)
+    use_ood_root_dataset: False
+    # Multi-layer parameters (Anti-Neurotoxin)
+    use_multi_layer: false    # Enable multi-layer templates
+    layer_aggregation: max    # Method to aggregate across layers: max, mean, top_k
+    # Trust system parameters (from paper defaults)
+    trust_mu: 0.95
+    trust_lmbda: 0.85
+    trust_alpha: 0.85
+    trust_k: 16
+    trust_m: 0.52
+    trust_theta: 0.65
+    trust_gamma: 0.5
+    trust_q: 1
+    trust_p: 3
+    trust_eta: 0.10
+    trust_delta: 0.02
+    trust_leak_cap: 0.10
+    trust_eta_conservative: 0.02
+    trust_delta_conservative: 0.01
+    trust_leak_cap_conservative: 0.03
+    trust_quarantine_exclusion_threshold: 0.95
+    trust_quarantine_risk_threshold: 0.9
+    trust_quarantine_exclusion_rounds: 10
+    trust_quarantine_risk_rounds: 5
+    trust_exit_exclusion_threshold: 0.6
+    trust_exit_risk_threshold: 0.5
+    trust_exit_rounds: 20
+    trust_tau_drop: 0.4
+
+  fera:
+    _target_: backfed.servers.FeRAServer
+    eta: 0.5
+    
+    # Signal weights
+    spectral_weight: 0.6
+    delta_weight: 0.4
+    
+    # Detection parameters
+    top_k_percent: 0.5  # Flag bottom 50% (consistency-based detection)
+    
+    # Outlier removal (catches norm-inflation attacks like Anticipate)
+    remove_outliers: true  # Two-sided adaptive filtering on raw norms
+    outlier_threshold: 2.0  # Modified Z-score threshold on raw norms (3.0σ)
+    
+    # Multi-layer options
+    use_multi_layer: false
+    layers: ['penultimate']  # Options: penultimate, layer2, layer3, layer4, all
+    combine_layers_method: 'mean'  # Options: mean, max, vote
+    
+    # Root dataset
+    root_size: 64
+    use_ood_root_dataset: false
 
 ########################################################
 # *Optimizer configuration

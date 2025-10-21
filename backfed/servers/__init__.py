@@ -25,6 +25,11 @@ from backfed.servers.flare_server import FlareServer
 from backfed.servers.robustlr_server import RobustLRServer
 from backfed.servers.indicator_server import IndicatorServer
 from backfed.servers.localdp_server import LocalDPServer
+from backfed.servers.fedavgcka_server import FedAvgCKAServer
+from backfed.servers.fedspectre_hybrid_server import FedSPECTREHybridServer
+from backfed.servers.fedspectre_stateful_server import FedSPECTREStatefulServer
+from backfed.servers.fedspectre_simple_server import FedSPECTRESimpleServer
+from backfed.servers.fera_server import FeRAServer
 
 __all__ = [
     # Base classes
@@ -56,4 +61,9 @@ __all__ = [
     "RobustLRServer",
     "IndicatorServer",
     "LocalDPServer",
+    "FedAvgCKAServer",
+    "FedSPECTREHybridServer",
+    "FedSPECTREStatefulServer",
+    "FedSPECTRESimpleServer",
+    "FeRAServer",
 ]
