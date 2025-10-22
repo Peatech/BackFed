@@ -30,6 +30,7 @@ from backfed.servers.fedspectre_hybrid_server import FedSPECTREHybridServer
 from backfed.servers.fedspectre_stateful_server import FedSPECTREStatefulServer
 from backfed.servers.fedspectre_simple_server import FedSPECTRESimpleServer
 from backfed.servers.fera_server import FeRAServer
+from backfed.servers.fera_anonm_server import FeRAAnomServer
 
 __all__ = [
     # Base classes
@@ -66,4 +67,5 @@ __all__ = [
     "FedSPECTREStatefulServer",
     "FedSPECTRESimpleServer",
     "FeRAServer",
+    "FeRAAnomServer",
 ]

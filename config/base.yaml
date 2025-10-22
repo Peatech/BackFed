@@ -41,7 +41,7 @@ federated_val_split: 0.0 # Validation split for each client's dataset (should be
 dataset: ??? # CIFAR10, CIFAR100, TinyImageNet, MNIST
 datapath: data
 partitioner: dirichlet # Choose from [uniform, dirichlet]
-alpha: 0.5 # Dirichlet distribution parameter
+alpha: 0.2 # Dirichlet distribution parameter
 normalize: True # Normalize the dataset
 
 # *Model configuration
@@ -254,7 +254,7 @@ aggregator_config:
     _target_: backfed.servers.FedSPECTREStatefulServer
     eta: 0.5
     # Base FedSPECTRE-Hybrid parameters
-    root_size: 64
+    root_size: 128
     alpha: 0.8  # CKA weight (LEGACY, use w_cka for Phase 1)
     beta: 0.0   # Stability weight (disabled, not implemented)
     gamma: 0.2  # Spectral weight (LEGACY, use w_spectral for Phase 1)
@@ -302,7 +302,7 @@ aggregator_config:
     
     # Outlier removal (catches norm-inflation attacks like Anticipate)
     remove_outliers: true  # Two-sided adaptive filtering on raw norms
-    outlier_threshold: 2.0  # Modified Z-score threshold on raw norms (3.0σ)
+    outlier_threshold: 0.5  # Modified Z-score threshold on raw norms (3.0σ)
     
     # Multi-layer options
     use_multi_layer: false
@@ -310,8 +310,64 @@ aggregator_config:
     combine_layers_method: 'mean'  # Options: mean, max, vote
     
     # Root dataset
-    root_size: 64
+    root_size: 128
     use_ood_root_dataset: false
+
+  fera_anonm:
+    _target_: backfed.servers.FeRAAnomServer
+    eta: 0.5
+    
+    # Original FeRA parameters (inherited)
+    spectral_weight: 0.6
+    delta_weight: 0.4
+    top_k_percent: 0.5
+    remove_outliers: true
+    outlier_threshold: 0.5
+    use_multi_layer: false
+    layers: ['penultimate']
+    combine_layers_method: 'mean'
+    root_size: 128
+    use_ood_root_dataset: false
+    
+    # Method enable flags
+    enable_method_1: true   # Unlearning resistance
+    enable_method_2: true   # Learning speed
+    enable_method_3: true   # Boundary distance
+    enable_method_4: true   # Stability
+    enable_method_5: true   # Combined
+    use_combined_only: false  # If true, only use combined for final prediction
+    
+    # Method 1: Unlearning parameters
+    unlearning_epochs: 5
+    unlearning_lr: 0.01
+    unlearning_batch_size: 64
+    
+    # Method 2: Learning speed parameters
+    learning_speed_iters: 20
+    learning_speed_lr: 0.01
+    learning_speed_synthetic_trigger: 'random'  # or 'pattern'
+    
+    # Method 3: Boundary distance parameters
+    boundary_attack_steps: 10
+    boundary_epsilon: 0.1
+    boundary_attack_type: 'fgsm'  # or 'pgd'
+    
+    # Method 4: Stability parameters
+    stability_noise_levels: [0.01, 0.05, 0.1]
+    stability_samples: 100
+    stability_trigger_types: ['pattern', 'pixel']
+    
+    # Method 5: Combined weights
+    combined_weight_unlearning: 0.35
+    combined_weight_speed: 0.30
+    combined_weight_boundary: 0.20
+    combined_weight_stability: 0.15
+    
+    # Telemetry
+    save_detailed_json: true
+    json_output_dir: 'outputs/fera_anonm_analysis'
+    print_comparison_table: true
+    print_per_method_tables: true
 
 ########################################################
 # *Optimizer configuration
